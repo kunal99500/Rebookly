@@ -1,0 +1,40 @@
+# ---------- Secrets (never commit) ----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# ---------- Flutter / Dart ----------
+frontend/build/
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.packages
+frontend/.pub-cache/
+frontend/.pub/
+
+# ---------- Supabase local files ----------
+supabase/.temp/
+supabase/.branches/
+
+# ---------- Generated files ----------
+backend/generated/
+*.log
+
+# ---------- OS and editors ----------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
