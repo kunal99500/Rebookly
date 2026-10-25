@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Confirm your booking · {{ business_name }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F4F5F8; --surface: #FFFFFF; --ink: #161B2E; --muted: #5C6478; --line: #E1E4EC;
+    --held: #3B4FD8; --held-soft: #ECEFFE; --released: #1F7A55; --released-soft: #E5F4EC;
+    --charged: #A35A06; --charged-soft: #FCF0DF; --danger: #B3261E;
+    --radius: 14px; color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0F1220; --surface: #181C2E; --ink: #E9EBF3; --muted: #9AA1B5; --line: #2A3046;
+      --held: #9AA8FF; --held-soft: #222A52; --released: #7FD3AB; --released-soft: #15332A;
+      --charged: #F2B872; --charged-soft: #3A2A14; --danger: #F2B8B5; color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 "Geist", system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 30rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+  .brand { font: 600 .8rem "Geist", system-ui, sans-serif; color: var(--muted); letter-spacing: .02em; margin: 0 0 1.25rem; }
+  h1 { font: 700 1.6rem/1.15 "Bricolage Grotesque", system-ui, sans-serif; margin: 0 0 .25rem; letter-spacing: -.01em; }
+  .sub { color: var(--muted); margin: 0; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.1rem 1.15rem; margin-top: 1rem; }
+  .money { font-family: "Geist Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .hold { background: var(--held-soft); border-color: transparent; }
+  .hold-title { display: flex; align-items: center; gap: .5rem; color: var(--held); font-weight: 600; margin: 0; }
+  .hold-amount { font: 700 2rem/1.1 "Bricolage Grotesque", system-ui, sans-serif; color: var(--held); margin: .35rem 0 .1rem; }
+  .hold-note { margin: 0; color: var(--ink); }
+  .rows { margin: .75rem 0 0; display: grid; gap: .3rem; font-size: .95rem; }
+  .row { display: flex; justify-content: space-between; gap: 1rem; }
+  .row span:first-child { color: var(--muted); }
+  .timeline { margin-top: 1rem; }
+  .bar { display: flex; height: .5rem; border-radius: 99px; overflow: hidden; background: var(--line); }
+  .bar .free { background: var(--released); flex: 3; }
+  .bar .fee { background: var(--charged); flex: 1; }
+  .ticks { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); margin-top: .35rem; gap: .5rem; }
+  h2 { font: 600 1rem "Geist", system-ui, sans-serif; margin: 0 0 .6rem; }
+  ul.policy { margin: 0; padding-left: 1.1rem; display: grid; gap: .3rem; color: var(--ink); font-size: .95rem; }
+  .field { min-height: 3rem; margin-bottom: .45rem; }
+  .pair { display: flex; gap: .5rem; } .pair > div { flex: 1; }
+  .btn { display: block; width: 100%; font: 600 1rem "Geist", system-ui, sans-serif; padding: .8rem; border-radius: 10px; border: 0; background: var(--held); color: #fff; cursor: pointer; text-align: center; text-decoration: none; }
+  .btn:disabled { opacity: .55; cursor: progress; }
+  .divider { display: flex; align-items: center; gap: .75rem; color: var(--muted); font-size: .85rem; margin: 1rem 0; }
+  .divider::before, .divider::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+  .muted { color: var(--muted); font-size: .88rem; }
+  .error { color: var(--danger); font-size: .92rem; margin: .75rem 0 0; }
+  .stamp { display: inline-block; font: 600 .8rem "Geist", system-ui, sans-serif; padding: .2rem .6rem; border-radius: 99px; background: var(--released-soft); color: var(--released); }
+  .ref { font: 500 1.35rem "Geist Mono", ui-monospace, monospace; letter-spacing: .04em; margin: .5rem 0; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <p class="brand">Rebookly · Secure checkout</p>
+  <h1>{{ business_name }}</h1>
+  <p class="sub">{{ service_name }} · {{ duration }} min</p>
+  <p class="sub">{{ when }} <span class="muted">({{ timezone }})</span></p>
+
+  {% if booking.status == "pending_payment" and order_id %}
+  <section id="pay">
+    <div class="card hold">
+      <p class="hold-title"><span aria-hidden="true">🔒</span> Held, not charged</p>
+      <p class="hold-amount money">{{ held_text }}</p>
+      <p class="hold-note">This amount is reserved on your payment method. It's only charged if the policy below applies.</p>
+      <div class="rows">
+        <div class="row"><span>{{ option_label }}</span><span class="money">{{ held_text }}</span></div>
+        <div class="row"><span>Service price</span><span class="money">{{ price_text }}</span></div>
+        <div class="row"><span>Charged now</span><span class="money">{{ zero_text }}</span></div>
+        <div class="row"><span>Due after your appointment</span><span class="money">{{ due_after_text }}</span></div>
+        <div class="row"><span>Most you could ever be charged</span><span class="money">{{ held_text }}</span></div>
+      </div>
+      {% if free_until %}
+      <div class="timeline" aria-label="Free cancellation until {{ free_until }}">
+        <div class="bar"><span class="free"></span><span class="fee"></span></div>
+        <div class="ticks"><span>Now</span><span>Free until {{ free_until }}</span><span>Appointment</span></div>
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <h2>Cancellation policy</h2>
+      <ul class="policy">{% for line in policy_lines %}<li>{{ line }}</li>{% endfor %}</ul>
+    </div>
+
+    <div class="card">
+      <div id="paypal-buttons"></div>
+      <div id="card-section">
+        <div class="divider">or pay by card</div>
+        <div id="card-name" class="field"></div>
+        <div id="card-number" class="field"></div>
+        <div class="pair"><div id="card-expiry" class="field"></div><div id="card-cvv" class="field"></div></div>
+        <button class="btn" id="card-submit" type="button">Hold {{ held_text }}</button>
+      </div>
+      <p class="muted" style="margin:.75rem 0 0">No PayPal account needed. Card details go straight to PayPal and never reach Rebookly.</p>
+      <p class="error" id="error" role="alert" hidden></p>
+    </div>
+    <p class="muted">Your time is reserved until {{ booking.payment_expires_at.strftime('%H:%M') }} UTC while you pay.</p>
+  </section>
+  {% endif %}
+
+  <section id="done" class="card" {% if booking.status != "confirmed" %}hidden{% endif %}>
+    <span class="stamp">Confirmed</span>
+    <p class="ref" id="ref">{{ booking.confirmation_number or "" }}</p>
+    <p>Your booking is confirmed and <strong class="money">{{ held_text }}</strong> is held, not charged.</p>
+    <a class="btn" href="{{ frontend_url }}/my">See my bookings</a>
+  </section>
+
+  {% if booking.status not in ("pending_payment", "confirmed") or (booking.status == "pending_payment" and not order_id) %}
+  <section class="card">
+    <h2>This checkout has expired</h2>
+    <p class="muted">The time was released because payment wasn't completed. Nothing was charged.</p>
+    <a class="btn" href="{{ frontend_url }}">Book again</a>
+  </section>
+  {% endif %}
+</main>
+
+{% if booking.status == "pending_payment" and order_id %}
+<script src="https://www.paypal.com/sdk/js?client-id={{ paypal_client_id | urlencode }}&currency={{ booking.currency }}&intent=authorize&components=buttons,card-fields"></script>
+<script>
+  const ORDER_ID = {{ order_id | tojson }};
+  const AUTHORIZE_URL = {{ ("/api/checkout/" ~ booking.id ~ "/authorize?sig=" ~ sig) | tojson }};
+  const errorEl = document.getElementById("error");
+
+  function showError(message) { errorEl.textContent = message; errorEl.hidden = false; }
+
+  async function createOrder() { return ORDER_ID; }  // the order was created securely on our server
+
+  async function onApprove() {
+    errorEl.hidden = true;
+    const res = await fetch(AUTHORIZE_URL, { method: "POST" });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) { showError(body.detail || "Something went wrong. Please try again."); return; }
+    document.getElementById("ref").textContent = body.confirmation_number;
+    document.getElementById("pay").hidden = true;
+    document.getElementById("done").hidden = false;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function onError() { showError("PayPal couldn't complete this. Please try again or use another method."); }
+
+  paypal.Buttons({ createOrder, onApprove, onError, style: { shape: "rect", height: 46 } }).render("#paypal-buttons");
+
+  const cardFields = paypal.CardFields({ createOrder, onApprove, onError });
+  if (cardFields.isEligible()) {
+    cardFields.NameField().render("#card-name");
+    cardFields.NumberField().render("#card-number");
+    cardFields.ExpiryField().render("#card-expiry");
+    cardFields.CVVField().render("#card-cvv");
+    document.getElementById("card-submit").addEventListener("click", (event) => {
+      event.target.disabled = true;
+      cardFields.submit().catch(() => showError("Please check your card details.")).finally(() => { event.target.disabled = false; });
+    });
+  } else {
+    document.getElementById("card-section").hidden = true;
+  }
+</script>
+{% endif %}
+</body>
+</html>

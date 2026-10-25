@@ -14,3 +14,5 @@ from app.models.policy import BusinessPolicy  # noqa: F401
 from app.models.service import Service  # noqa: F401
 from app.models.slot import Slot  # noqa: F401
 from app.models.waitlist import WaitlistEntry  # noqa: F401
+from app.models.availability import AvailabilityRule  # noqa: F401
+from app.models.photo import BusinessPhoto  # noqa: F401

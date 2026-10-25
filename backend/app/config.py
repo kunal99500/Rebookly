@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_service_role_key: SecretStr = SecretStr("")
     database_url: SecretStr = SecretStr("")
+    supabase_jwt_secret: SecretStr = SecretStr("")  # only for projects still on legacy HS256 tokens
+
+        # ===== Data protection =====
+    data_encryption_key: SecretStr = SecretStr("")  # one key, or several separated by commas (newest first)
+    phone_hash_key: SecretStr = SecretStr("")
 
     # ===== AI (Phase 3) =====
     llm_provider: str = ""
@@ -69,6 +74,11 @@ class Settings(BaseSettings):
             raise ValueError(
                 "ENABLE_DEV_ROUTES and SIMULATED_CLOCK must be false in production or with live PayPal"
             )
+
+        if self.app_env == "production" and not (
+            self.data_encryption_key.get_secret_value() and self.phone_hash_key.get_secret_value()
+        ):
+            raise ValueError("DATA_ENCRYPTION_KEY and PHONE_HASH_KEY are required in production")
         return self
 
     # ---------- helpers ----------
