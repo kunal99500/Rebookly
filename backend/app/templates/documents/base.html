@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{{ doc.title }} · {{ doc.business.name }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Geist:wght@400;600&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>{% include "documents/partials/styles.css" %}</style>
+</head>
+<body>
+<main>
+  <p class="brand"><span>Rebookly</span><span class="ref">{{ doc.number }}</span></p>
+  <article class="ticket">
+    <div class="ticket-top">
+      {% block stamp %}{% endblock %}
+      <h1>{{ doc.business.name }}</h1>
+      <p class="sub">{{ doc.booking.service }} · {{ doc.booking.duration_minutes }} min</p>
+      <p class="sub">{{ doc.booking.when }} <span style="opacity:.75">({{ doc.business.timezone }})</span></p>
+      {% block headline %}{% endblock %}
+    </div>
+    <div class="perforation" aria-hidden="true"></div>
+    <div class="ticket-bottom">
+      {% block body %}{% endblock %}
+      {% include "documents/partials/details.html" %}
+    </div>
+  </article>
+  <div class="actions">
+    <button class="btn" type="button" onclick="window.print()">Save as PDF</button>
+    <a class="btn primary" href="{{ frontend_url }}/my">My bookings</a>
+  </div>
+  <footer>Issued {{ doc.issued_local }} · {{ doc.title }} {{ doc.number }}<br>
+    {% if doc.business.address %}{{ doc.business.address }} · {% endif %}{% if doc.business.phone %}{{ doc.business.phone }}{% endif %}</footer>
+</main>
+</body>
+</html>

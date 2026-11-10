@@ -26,3 +26,30 @@ def payment_status_after_capture(held: Decimal, captured: Decimal) -> str:
 
 def masked_last4(last4: str | None) -> str | None:
     return f"•••• {last4}" if last4 else None
+
+
+# ---------- recovering payments that didn't finish ----------
+
+SETTLED_BY_CAPTURE = {"CAPTURED", "PARTIALLY_CAPTURED"}
+STILL_OPEN = {"CREATED", "PENDING"}
+
+
+def settle_from_paypal(intended: str, paypal_status: str) -> str:
+    """Compare what we meant to do with what PayPal says actually happened to the hold.
+
+    Returns "already_done" (PayPal finished it; just record it), "retry" (the hold is untouched;
+    safe to try again), or "cannot_complete" (e.g. the hold expired or was denied).
+    """
+    status = (paypal_status or "").upper()
+    if intended == "capture" and status in SETTLED_BY_CAPTURE:
+        return "already_done"
+    if intended == "void" and status == "VOIDED":
+        return "already_done"
+    if status in STILL_OPEN:
+        return "retry"
+    return "cannot_complete"
+
+
+def is_possible_no_show(starts_at: datetime, grace_minutes: int, checked_in: bool, now: datetime) -> bool:
+    """Grace period over and nobody checked in: the owner should look at it."""
+    return not checked_in and now >= starts_at + timedelta(minutes=grace_minutes)

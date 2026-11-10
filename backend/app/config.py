@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     enable_dev_routes: bool = False
     simulated_clock: bool = False
 
+    enable_jobs: bool = True  # background jobs (release unpaid bookings, recover payments)
+
     # ---------- validation ----------
 
     @field_validator("default_currency")

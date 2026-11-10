@@ -16,6 +16,7 @@ from app.config import get_settings
 from app.payments.paypal import PayPalClient
 from app.security.phone import PhoneProtector
 from app.media.storage import SupabaseStorage
+from app.jobs.scheduler import JobRunner, start_scheduler
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(name)s  %(message)s")
 logger = logging.getLogger("rebookly")
@@ -65,6 +66,13 @@ async def lifespan(app: FastAPI):
         )
     else:
         logger.warning("PayPal credentials are missing: payment features are disabled.")
+    # Background jobs (release unpaid bookings, recover stuck payments).
+    app.state.jobs, scheduler = None, None
+    if settings.enable_jobs and db.is_db_ready():
+        app.state.jobs = JobRunner(app.state.paypal)
+        scheduler = start_scheduler(app.state.jobs)
+    else:
+        logger.warning("Background jobs are off.")
 
     logger.info(
         "Rebookly API started: env=%s, paypal=%s, database=%s, sign_in=%s, phone_protection=%s, "
@@ -75,6 +83,8 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown: close connections cleanly.
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
     if app.state.paypal is not None:
         await app.state.paypal.close()
     await db.close_db()
@@ -135,21 +145,20 @@ def create_app() -> FastAPI:
         # Public API (no sign-in)
     from app.routers.public import businesses as public_businesses
     app.include_router(public_businesses.router)
-    from app.routers.owner import businesses as owner_businesses
-    from app.routers.owner import policies as owner_policies
-    from app.routers.owner import services as owner_services
-    from app.routers.owner import schedule as owner_schedule
-    app.include_router(owner_schedule.router)
-    app.include_router(owner_businesses.router)
-    app.include_router(owner_services.router)
-    app.include_router(owner_policies.router)
-    # Client API and checkout
-    from app.routers import checkout
-    from app.routers.client import bookings as client_bookings
-    app.include_router(client_bookings.router)
-    app.include_router(checkout.router)
+        # Owner API
     from app.routers.owner import bookings as owner_bookings
-    app.include_router(owner_bookings.router)
+    from app.routers.owner import businesses as owner_businesses
+    from app.routers.owner import dashboard as owner_dashboard
+    from app.routers.owner import decisions as owner_decisions
+    from app.routers.owner import photos as owner_photos
+    from app.routers.owner import policies as owner_policies
+    from app.routers.owner import schedule as owner_schedule
+    from app.routers.owner import services as owner_services
+    for module in (owner_businesses, owner_services, owner_policies, owner_schedule,
+                   owner_photos, owner_bookings, owner_decisions, owner_dashboard):
+        app.include_router(module.router)
+    from app.routers.public import documents as public_documents
+    app.include_router(public_documents.router)
 
 
     # Development-only routes (sandbox test page, demo clock). Never enabled in production.

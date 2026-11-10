@@ -1,7 +1,7 @@
 """Dependencies for owner routes: who the owner is, and which business they may manage."""
 import uuid
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
@@ -30,3 +30,10 @@ async def get_owned_business(
     if business is None or business.owner_user_id != owner.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Business not found")
     return business
+
+def get_paypal(request: Request):
+    """The shared PayPal client, or a clear error if payments aren't configured."""
+    paypal = getattr(request.app.state, "paypal", None)
+    if paypal is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Payments are not available right now")
+    return paypal

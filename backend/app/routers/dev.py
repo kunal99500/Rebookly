@@ -48,7 +48,7 @@ async def checkout_page(
     settings = get_settings()
     return templates.TemplateResponse(
         request,
-        "checkout.html",
+        "dev/checkout.html",
         {
             "client_id": settings.paypal_client_id,  # the client ID is public; the secret never goes here
             "currency": settings.default_currency,
@@ -165,3 +165,14 @@ async def clock_advance(minutes: int = Query(ge=-43200, le=43200)):
 @router.post("/api/dev/clock/reset")
 async def clock_reset():
     return {"now": _sim_clock().reset().isoformat()}
+
+
+# ---------- background jobs ----------
+
+@router.post("/api/dev/jobs/run")
+async def run_jobs(request: Request):
+    """Run every background job once, right now (instead of waiting for the timer)."""
+    runner = getattr(request.app.state, "jobs", None)
+    if runner is None:
+        raise HTTPException(503, "Background jobs are off. Set ENABLE_JOBS=true and restart.")
+    return await runner.run_all()

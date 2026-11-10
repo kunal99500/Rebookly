@@ -1,4 +1,4 @@
-"""Owner API: see bookings, check clients in, mark no-shows, cancel, and handle fee decisions."""
+"""Owner API: see bookings, check clients in, mark no-shows, and cancel."""
 import uuid
 from datetime import datetime, timedelta
 
@@ -10,11 +10,13 @@ from app.auth.supabase_auth import AuthUser
 from app.clock import get_clock
 from app.db import get_session
 from app.models import Booking, Business, Client, Decision, Payment, Service
-from app.routers.owner.deps import get_owned_business, get_owner
+from app.routers.owner.deps import get_owned_business, get_owner, get_paypal
 from app.rules.engine import Event
 from app.rules.outcomes import can_check_in, masked_last4
-from app.schemas.outcome import ApproveIn, CheckInIn, DecisionOut, OutcomeOut, OwnerBookingOut, WaiveIn
+from app.schemas.outcome import CheckInIn, DecisionOut, OutcomeOut, OwnerBookingOut
 from app.services import outcomes
+from app.documents.issue import list_for_booking
+from app.documents.schemas import DocumentLinkOut
 
 router = APIRouter(prefix="/api/owner/businesses/{business_id}", tags=["owner: bookings"])
 
@@ -24,13 +26,6 @@ MESSAGES = {
     "waived": "Done. No fee was charged.",
     "failed": "PayPal couldn't complete this. You can try again from your approvals.",
 }
-
-
-def _paypal(request: Request):
-    paypal = getattr(request.app.state, "paypal", None)
-    if paypal is None:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Payments are not available right now")
-    return paypal
 
 
 async def _business_booking(session: AsyncSession, business: Business, booking_id: uuid.UUID) -> Booking:
@@ -92,7 +87,7 @@ async def check_in(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "This code isn't for a booking at your business")
     if not can_check_in(booking.starts_at, booking.ends_at, get_clock().now()):
         raise HTTPException(status.HTTP_409_CONFLICT, "Check-in opens an hour before the appointment")
-    booking, decision = await outcomes.apply_event(session, _paypal(request), booking.id, Event.ATTENDED, "owner", owner.id)
+    booking, decision = await outcomes.apply_event(session, get_paypal(request), booking.id, Event.ATTENDED, "owner", owner.id)
     return _outcome(booking, decision)
 
 
@@ -105,7 +100,7 @@ async def mark_no_show(
 ):
     """Mark a client as not attending. Only possible after the grace period; the fee waits for your approval."""
     booking = await _business_booking(session, business, booking_id)
-    booking, decision = await outcomes.apply_event(session, _paypal(request), booking.id, Event.NO_SHOW, "owner", owner.id)
+    booking, decision = await outcomes.apply_event(session, get_paypal(request), booking.id, Event.NO_SHOW, "owner", owner.id)
     return _outcome(booking, decision)
 
 
@@ -119,55 +114,15 @@ async def cancel_booking(
     """Cancel on the client's behalf as the business. The hold is always released in full."""
     booking = await _business_booking(session, business, booking_id)
     booking, decision = await outcomes.apply_event(
-        session, _paypal(request), booking.id, Event.OWNER_CANCELLED, "owner", owner.id)
+        session, get_paypal(request), booking.id, Event.OWNER_CANCELLED, "owner", owner.id)
     return _outcome(booking, decision)
 
-
-# ---------- fee decisions ----------
-
-async def _business_decision(session: AsyncSession, business: Business, decision_id: uuid.UUID) -> Decision:
-    decision = await session.scalar(
-        select(Decision).join(Booking, Booking.id == Decision.booking_id)
-        .where(Decision.id == decision_id, Booking.business_id == business.id))
-    if decision is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Decision not found")
-    return decision
-
-
-@router.get("/decisions", response_model=list[DecisionOut])
-async def list_decisions(
-    status_filter: str = Query(default="pending_approval", alias="status"),
+@router.get("/bookings/{booking_id}/documents", response_model=list[DocumentLinkOut])
+async def booking_documents(
+    booking_id: uuid.UUID,
     business: Business = Depends(get_owned_business),
     session: AsyncSession = Depends(get_session),
 ):
-    """Your approvals inbox (pending by default). Use status=failed to see anything PayPal couldn't complete."""
-    rows = await session.scalars(
-        select(Decision).join(Booking, Booking.id == Decision.booking_id)
-        .where(Booking.business_id == business.id, Decision.status == status_filter)
-        .order_by(Decision.created_at)
-    )
-    return list(rows)
-
-
-@router.post("/decisions/{decision_id}/approve", response_model=DecisionOut)
-async def approve(
-    decision_id: uuid.UUID, data: ApproveIn, request: Request,
-    business: Business = Depends(get_owned_business),
-    owner: AuthUser = Depends(get_owner),
-    session: AsyncSession = Depends(get_session),
-):
-    """Charge the fee (or a lower amount). The rest of the hold is released."""
-    decision = await _business_decision(session, business, decision_id)
-    return await outcomes.approve(session, _paypal(request), decision.id, owner.id, data.final_amount, data.note)
-
-
-@router.post("/decisions/{decision_id}/waive", response_model=DecisionOut)
-async def waive(
-    decision_id: uuid.UUID, data: WaiveIn, request: Request,
-    business: Business = Depends(get_owned_business),
-    owner: AuthUser = Depends(get_owner),
-    session: AsyncSession = Depends(get_session),
-):
-    """Don't charge anything. The whole hold is released."""
-    decision = await _business_decision(session, business, decision_id)
-    return await outcomes.waive(session, _paypal(request), decision.id, owner.id, data.note)
+    """Every confirmation, receipt and notice issued for this booking."""
+    booking = await _business_booking(session, business, booking_id)
+    return await list_for_booking(session, booking.id)

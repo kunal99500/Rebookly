@@ -1,0 +1,19 @@
+{% extends "documents/base.html" %}
+{% block stamp %}<span class="stamp held">🔒 Confirmed · Held, not charged</span>{% endblock %}
+{% block headline %}
+<p class="headline held money">{{ doc.money.held }}</p>
+<p class="sub">held on your payment method, not charged</p>
+{% endblock %}
+{% block body %}
+<div class="rows">
+  <div class="row"><span>Service price</span><span class="money">{{ doc.money.price }}</span></div>
+  <div class="row"><span>Held now</span><span class="money">{{ doc.money.held }}</span></div>
+  <div class="row"><span>Charged now</span><span class="money">{{ doc.money.charged }}</span></div>
+  <div class="row total"><span>Due after your appointment</span><span class="money">{{ doc.money.due_after }}</span></div>
+</div>
+{% if doc.policy.free_until %}<div class="note">Free cancellation until <strong>{{ doc.policy.free_until }}</strong>.</div>{% endif %}
+{% if qr %}
+<p class="section-title">Check-in</p>
+<div class="qr">{{ qr }}<p class="sub">Show this code when you arrive. It confirms your visit and applies your hold to the price.</p></div>
+{% endif %}
+{% endblock %}

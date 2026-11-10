@@ -1,0 +1,16 @@
+<p class="section-title">Booking</p>
+<div class="rows">
+  <div class="row"><span>Reference</span><span class="ref">{{ doc.booking.confirmation_number }}</span></div>
+  <div class="row"><span>Name</span><span>{{ doc.client.name }}</span></div>
+  {% if doc.client.attendee %}<div class="row"><span>Attending</span><span>{{ doc.client.attendee }}</span></div>{% endif %}
+  {% if doc.client.phone_masked %}<div class="row"><span>Phone</span><span class="money">{{ doc.client.phone_masked }}</span></div>{% endif %}
+</div>
+<p class="section-title">Payment</p>
+<div class="rows">
+  <div class="row"><span>Method</span><span>
+    {% if doc.payment.method == "card" %}{{ doc.payment.card_brand or "Card" }} •••• {{ doc.payment.card_last_digits }}
+    {% elif doc.payment.method == "paypal" %}PayPal{% else %}—{% endif %}</span></div>
+  {% if doc.payment.paypal_order_id %}<div class="row"><span>PayPal reference</span><span class="money">{{ doc.payment.paypal_order_id }}</span></div>{% endif %}
+</div>
+<p class="section-title">Cancellation policy (version {{ doc.policy.version }})</p>
+<ul class="policy">{% for line in doc.policy.lines %}<li>{{ line }}</li>{% endfor %}</ul>

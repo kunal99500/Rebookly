@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 from sqlalchemy import MetaData, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from contextlib import asynccontextmanager
 
 # Predictable names for indexes and constraints, so Alembic migrations stay clean.
 NAMING_CONVENTION = {
@@ -89,3 +90,12 @@ async def check_db() -> str:
     async with _engine.connect() as conn:
         result = await conn.execute(text("select version()"))
         return result.scalar_one()
+
+
+@asynccontextmanager
+async def session_scope() -> AsyncIterator[AsyncSession]:
+    """A session for work outside a web request, such as background jobs."""
+    if _sessionmaker is None:
+        raise RuntimeError("Database not initialised. Is DATABASE_URL set?")
+    async with _sessionmaker() as session:
+        yield session

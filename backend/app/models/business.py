@@ -24,6 +24,8 @@ class Business(UUIDPrimaryKey, Timestamps, Base):
         CheckConstraint("longitude IS NULL OR longitude BETWEEN -180 AND 180", name="longitude_range"),
         CheckConstraint("rating_average IS NULL OR rating_average BETWEEN 1 AND 5", name="rating_range"),
         CheckConstraint("rating_count >= 0", name="rating_count_not_negative"),
+        CheckConstraint("start_interval_minutes IN (5, 10, 15, 20, 30, 60)", name="start_interval_valid"),
+        CheckConstraint("min_notice_minutes BETWEEN 0 AND 10080", name="min_notice_range"),
     )
 
     # The owner's Supabase login ID. Only this user can manage the business.
@@ -53,6 +55,9 @@ class Business(UUIDPrimaryKey, Timestamps, Base):
     current_policy_version: Mapped[int | None] = mapped_column(Integer)
     # Kept up to date when reviews are added (Step 17), so search doesn't recalculate them.
     rating_average: Mapped[Decimal | None] = mapped_column(Numeric(3, 2))
+           # Scheduling: start times are offered every N minutes, and never sooner than the minimum notice.
+    start_interval_minutes: Mapped[int] = mapped_column(Integer, default=15, server_default="15")
+    min_notice_minutes: Mapped[int] = mapped_column(Integer, default=60, server_default="60")
     rating_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     services: Mapped[list["Service"]] = relationship(
         back_populates="business", cascade="all, delete-orphan", order_by="Service.sort_order"

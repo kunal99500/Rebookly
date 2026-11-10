@@ -1,0 +1,13 @@
+{% extends "documents/base.html" %}
+{% block stamp %}<span class="stamp charged">Paid</span>{% endblock %}
+{% block headline %}
+<p class="headline charged money">{{ doc.money.charged }}</p>
+<p class="sub">charged via PayPal and applied to your appointment</p>
+{% endblock %}
+{% block body %}
+<div class="rows">
+  <div class="row"><span>Service price</span><span class="money">{{ doc.money.price }}</span></div>
+  <div class="row"><span>Paid via PayPal</span><span class="money">{{ doc.money.charged }}</span></div>
+  <div class="row total"><span>Remaining (paid at the business)</span><span class="money">{{ doc.money.due_after }}</span></div>
+</div>
+{% endblock %}

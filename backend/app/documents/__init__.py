@@ -1,0 +1,1 @@
+"""Receipts and confirmations: what each document contains, issuing them, and showing them."""

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PayPal sandbox test · Rebookly</title>
+<style>
+  :root { --bg:#F5F6F8; --surface:#fff; --ink:#1B2331; --muted:#5A6475; --line:#DCE0E7; --accent:#2E56C9; --ok:#2A7A57; --err:#B3261E; color-scheme: light; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#12161D; --surface:#1A2029; --ink:#E6E9EF; --muted:#9AA3B2; --line:#2C3442; --accent:#8AA7F5; --ok:#7BCFA6; --err:#F2B8B5; color-scheme: dark; } }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 34rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+  h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.05rem; margin: 0 0 .75rem; }
+  .muted { color: var(--muted); font-size: .92rem; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1.1rem; margin: 1.25rem 0; }
+  .field { min-height: 3rem; margin-bottom: .5rem; }
+  button { font: inherit; font-weight: 600; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: .6rem 1rem; cursor: pointer; }
+  button.primary { background: var(--accent); color: #fff; border-color: transparent; width: 100%; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  input { font: inherit; padding: .5rem .6rem; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); width: 7rem; }
+  .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: .25rem 1rem; margin: 0; font-size: .92rem; }
+  dt { color: var(--muted); }
+  dd { margin: 0; word-break: break-all; }
+  pre { background: var(--bg); border-radius: 8px; padding: .75rem; font-size: .8rem; overflow-x: auto; max-height: 18rem; white-space: pre-wrap; }
+  .ok { color: var(--ok); } .err { color: var(--err); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>PayPal sandbox test</h1>
+  <p class="muted">Development only. Proves authorize, partial capture and void with a PayPal account and with a card.</p>
+
+  <div class="card">
+    <strong>{{ amount }} {{ currency }}</strong> will be held, not charged.
+    {% if payee %}<div class="muted">Routing test: payee merchant {{ payee }}</div>{% endif %}
+  </div>
+
+  {% if not client_id %}
+    <div class="card err">PAYPAL_CLIENT_ID is not set. Add your sandbox credentials to backend/.env and restart the server.</div>
+  {% else %}
+  <section class="card" id="pay">
+    <h2>Pay with PayPal</h2>
+    <div id="paypal-buttons"></div>
+
+    <h2 style="margin-top:1.25rem;margin-bottom:.25rem">Pay with card</h2>
+    <p class="muted" style="margin-top:0">No PayPal account needed.</p>
+    <div id="card-form">
+      <div id="card-name" class="field"></div>
+      <div id="card-number" class="field"></div>
+      <div class="row">
+        <div id="card-expiry" class="field" style="flex:1"></div>
+        <div id="card-cvv" class="field" style="flex:1"></div>
+      </div>
+      <button class="primary" id="card-submit">Hold {{ amount }} {{ currency }}</button>
+    </div>
+    <p id="card-ineligible" class="muted" hidden>
+      Card fields aren't available for this sandbox app. Enable advanced card payments for your sandbox app,
+      or use "Debit or Credit Card" under the PayPal buttons instead.
+    </p>
+  </section>
+
+  <section class="card" id="result" hidden>
+    <h2 class="ok">Hold placed</h2>
+    <dl id="auth-details"></dl>
+    <div class="row" style="margin-top:1rem">
+      <input id="capture-amount" type="number" step="0.01" min="0.01" value="{{ amount }}" aria-label="Capture amount">
+      <button id="capture-btn">Capture</button>
+      <button id="void-btn">Void (release hold)</button>
+      <button id="refresh-btn">Refresh status</button>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>Log</h2>
+    <pre id="log">Ready.</pre>
+  </section>
+</main>
+
+{% if client_id %}
+<script src="https://www.paypal.com/sdk/js?client-id={{ client_id | urlencode }}&currency={{ currency }}&intent=authorize&components=buttons,card-fields"></script>
+<script>
+  const AMOUNT = {{ amount | tojson }};
+  const PAYEE = {{ payee | tojson }};
+  let authorizationId = null;
+
+  const logEl = document.getElementById("log");
+  function log(label, data) {
+    const line = `[${new Date().toLocaleTimeString()}] ${label}` + (data !== undefined ? `\n${JSON.stringify(data, null, 2)}` : "");
+    logEl.textContent = line + "\n\n" + logEl.textContent;
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      log(`Error ${res.status} on ${path}`, body);
+      throw new Error(body?.detail?.message || `Request failed: ${res.status}`);
+    }
+    return body;
+  }
+
+  async function createOrder() {
+    const order = await api("/api/dev/orders", {
+      method: "POST",
+      body: JSON.stringify({ amount: AMOUNT, reference: "test-" + Date.now(), payee_merchant_id: PAYEE }),
+    });
+    log("Order created", order);
+    return order.id;
+  }
+
+  async function onApprove(data) {
+    const auth = await api(`/api/dev/orders/${data.orderID}/authorize`, { method: "POST" });
+    log("Hold placed (authorized)", auth);
+    showAuthorization(auth);
+  }
+
+  function onError(err) { log("PayPal error", String(err)); }
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+
+  function showAuthorization(auth) {
+    authorizationId = auth.authorization_id;
+    const method = auth.payment_method === "card"
+      ? `Card ${auth.card_brand ?? ""} •••• ${auth.card_last_digits ?? ""}`
+      : "PayPal account";
+    const rows = [
+      ["Authorization", auth.authorization_id],
+      ["Order", auth.order_id],
+      ["Status", auth.status],
+      ["Held", `${auth.amount} ${auth.currency}`],
+      ["Method", method],
+      ["Expires", auth.expiration_time ?? "—"],
+    ];
+    document.getElementById("auth-details").innerHTML =
+      rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("");
+    document.getElementById("pay").hidden = true;
+    document.getElementById("result").hidden = false;
+  }
+
+  paypal.Buttons({ createOrder, onApprove, onError }).render("#paypal-buttons");
+
+  const cardFields = paypal.CardFields({ createOrder, onApprove, onError });
+  if (cardFields.isEligible()) {
+    cardFields.NameField().render("#card-name");
+    cardFields.NumberField().render("#card-number");
+    cardFields.ExpiryField().render("#card-expiry");
+    cardFields.CVVField().render("#card-cvv");
+    document.getElementById("card-submit").addEventListener("click", (event) => {
+      event.target.disabled = true;
+      cardFields.submit()
+        .catch((err) => log("Card payment failed", String(err)))
+        .finally(() => { event.target.disabled = false; });
+    });
+  } else {
+    document.getElementById("card-form").hidden = true;
+    document.getElementById("card-ineligible").hidden = false;
+  }
+
+  document.getElementById("capture-btn").addEventListener("click", async () => {
+    const amount = document.getElementById("capture-amount").value;
+    try {
+      const result = await api(`/api/dev/authorizations/${authorizationId}/capture`, {
+        method: "POST", body: JSON.stringify({ amount, final_capture: true }),
+      });
+      log(`Captured ${amount}`, result);
+    } catch (e) { /* already logged */ }
+  });
+
+  document.getElementById("void-btn").addEventListener("click", async () => {
+    try { log("Voided (hold released)", await api(`/api/dev/authorizations/${authorizationId}/void`, { method: "POST" })); }
+    catch (e) { /* already logged */ }
+  });
+
+  document.getElementById("refresh-btn").addEventListener("click", async () => {
+    try { log("Hold status", await api(`/api/dev/authorizations/${authorizationId}`)); }
+    catch (e) { /* already logged */ }
+  });
+</script>
+{% endif %}
+</body>
+</html>

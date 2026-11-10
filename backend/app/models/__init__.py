@@ -16,3 +16,8 @@ from app.models.slot import Slot  # noqa: F401
 from app.models.waitlist import WaitlistEntry  # noqa: F401
 from app.models.availability import AvailabilityRule  # noqa: F401
 from app.models.photo import BusinessPhoto  # noqa: F401
+from app.models.booking_item import BookingItem  # noqa: F401
+from app.models.location import Location  # noqa: F401
+from app.models.resource import Resource  # noqa: F401
+from app.models.staff import Staff, StaffHours, StaffService  # noqa: F401
+from app.models.time_off import TimeOff  # noqa: F401

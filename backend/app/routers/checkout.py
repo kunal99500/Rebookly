@@ -6,7 +6,7 @@ for this exact booking, so no sign-in is needed on this page.
 import uuid
 from datetime import timedelta
 from pathlib import Path
-from zoneinfo import ZoneInfo
+
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
@@ -21,21 +21,13 @@ from app.rules.policy_text import policy_summary
 from app.rules.engine import Policy
 from app.security.links import verify_checkout_signature
 from app.services import bookings
+from app.rules.formatting import local_time, money
 
 router = APIRouter(tags=["checkout"])
 templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
 
 OPTION_LABELS = {"deposit_held": "Deposit", "full_held": "Full amount"}
-CURRENCY_SYMBOLS = {"USD": "$", "EUR": "€", "GBP": "£", "INR": "₹", "AUD": "A$", "CAD": "C$"}
 
-
-def money(amount, currency: str) -> str:
-    symbol = CURRENCY_SYMBOLS.get(currency)
-    return f"{symbol}{amount:,.2f}" if symbol else f"{amount:,.2f} {currency}"
-
-
-def local_time(moment, tz: str) -> str:
-    return moment.astimezone(ZoneInfo(tz)).strftime("%a %d %b, %I:%M %p").replace(" 0", " ")
 
 
 async def _signed_booking(booking_id: uuid.UUID, sig: str, session: AsyncSession) -> Booking:

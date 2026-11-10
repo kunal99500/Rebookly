@@ -17,8 +17,9 @@ from app.clock import get_clock
 from app.models import Booking, Decision, Payment, Slot
 from app.payments.paypal import PayPalClient, PayPalError
 from app.rules.engine import Action, BookingFacts, Decision as EngineDecision, Event, Policy, decide
-from app.rules.outcomes import initial_status, payment_status_after_capture
+from app.rules.outcomes import initial_status, payment_status_after_capture, settle_from_paypal
 from app.services import audit
+from app.documents.issue import issue_for_decision, issue_safely
 
 CANCEL_EVENTS = (Event.CLIENT_CANCELLED, Event.OWNER_CANCELLED)
 NEW_BOOKING_STATUS = {
@@ -147,6 +148,7 @@ async def execute(session: AsyncSession, paypal: PayPalClient, decision_id: uuid
     audit.record(session, actor_type="system", action=money_action, business_id=booking.business_id,
                  booking_id=booking.id, details={"decision_id": str(decision.id), "amount": str(amount),
                                                  "paypal_debug_id": decision.last_paypal_debug_id})
+    await issue_safely(session, issue_for_decision(session, decision))  # receipt or release notice
     await session.commit()
     await session.refresh(decision)
     return decision
@@ -196,3 +198,58 @@ async def waive(
                  business_id=booking.business_id, booking_id=booking.id, details={"decision_id": str(decision.id)})
     await session.commit()
     return await execute(session, paypal, decision.id)
+
+async def recover(session: AsyncSession, paypal: PayPalClient, decision_id: uuid.UUID) -> Decision:
+    """Finish a decision that got stuck ("executing") or failed, without ever charging twice.
+
+    We first ask PayPal what actually happened to the hold:
+      * PayPal already did it  -> just record it,
+      * the hold is untouched  -> try again with a fresh request ID,
+      * the hold can't be used -> mark failed with a clear reason.
+    """
+    decision = await session.scalar(select(Decision).where(Decision.id == decision_id).with_for_update())
+    if decision is None or decision.status not in ("executing", "failed"):
+        return decision
+    payment = await session.get(Payment, decision.payment_id)
+    booking = await session.get(Booking, decision.booking_id)
+    amount = decision.final_amount if decision.final_amount is not None else decision.amount
+    intended = "capture" if decision.action == "capture" and amount > 0 else "void"
+
+    try:
+        authorization = await paypal.get_authorization(payment.paypal_authorization_id)
+    except PayPalError:
+        return decision  # PayPal unreachable; the next run will try again
+
+    paypal_status = authorization.get("status", "")
+    verdict = settle_from_paypal(intended, paypal_status)
+    now = get_clock().now()
+
+    if verdict == "retry":
+        decision.status = "approved"
+        # A new request ID is safe here: PayPal has just confirmed the hold is untouched.
+        decision.paypal_request_id = f"decision-{decision.id}-retry-{int(now.timestamp())}"
+        await session.commit()
+        return await execute(session, paypal, decision.id)
+
+    if verdict == "already_done":
+        if intended == "capture":
+            payment.amount_captured = payment.amount_captured + amount
+            payment.status = payment_status_after_capture(payment.amount, payment.amount_captured)
+            payment.captures = [*payment.captures,
+                                {"id": None, "amount": str(amount), "at": now.isoformat(), "reconciled": True}]
+        else:
+            payment.status = "voided"
+        decision.status = "waived" if decision.needs_owner_approval and amount == 0 else "executed"
+        decision.final_amount = amount if intended == "capture" else Decimal("0")
+        decision.executed_at, decision.failure_reason = now, None
+        action = "payment.reconciled"
+    else:
+        decision.status = "failed"
+        decision.failure_reason = f"PayPal shows this hold as {paypal_status or 'unknown'}, so it can't be completed"
+        action = "payment.unrecoverable"
+
+    audit.record(session, actor_type="system", action=action, business_id=booking.business_id, booking_id=booking.id,
+                 details={"decision_id": str(decision.id), "paypal_status": paypal_status})
+    await session.commit()
+    await session.refresh(decision)
+    return decision

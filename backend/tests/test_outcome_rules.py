@@ -44,3 +44,30 @@ def test_payment_status_after_capture():
 def test_masked_phone():
     assert masked_last4("3456") == "•••• 3456"
     assert masked_last4(None) is None
+
+
+# ---------- recovering payments ----------
+
+from app.rules.outcomes import is_possible_no_show, settle_from_paypal  # noqa: E402
+
+
+@pytest.mark.parametrize("intended, paypal_status, verdict", [
+    ("capture", "CAPTURED", "already_done"),            # PayPal did it; our server stopped before recording it
+    ("capture", "PARTIALLY_CAPTURED", "already_done"),
+    ("void", "VOIDED", "already_done"),
+    ("capture", "CREATED", "retry"),                    # hold untouched: safe to try again
+    ("void", "PENDING", "retry"),
+    ("capture", "VOIDED", "cannot_complete"),           # released already; can't charge now
+    ("void", "CAPTURED", "cannot_complete"),
+    ("capture", "DENIED", "cannot_complete"),
+    ("capture", "EXPIRED", "cannot_complete"),
+    ("capture", "", "cannot_complete"),
+])
+def test_settle_from_paypal(intended, paypal_status, verdict):
+    assert settle_from_paypal(intended, paypal_status) == verdict
+
+
+def test_possible_no_show_only_after_grace_and_without_check_in():
+    assert not is_possible_no_show(START, 10, False, START + timedelta(minutes=9))
+    assert is_possible_no_show(START, 10, False, START + timedelta(minutes=10))
+    assert not is_possible_no_show(START, 10, True, START + timedelta(minutes=30))

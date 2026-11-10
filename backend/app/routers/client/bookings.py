@@ -17,6 +17,9 @@ from app.security.links import checkout_signature
 from app.security.phone import mask_phone
 from app.services import bookings, clients, outcomes
 
+from app.documents.issue import list_for_booking
+from app.documents.schemas import DocumentLinkOut
+
 router = APIRouter(prefix="/api/client", tags=["client"])
 
 
@@ -135,3 +138,12 @@ async def cancel(
         "executed": "Cancelled. Your hold has been released.",
     }.get(decision.status, "Cancelled.")
     return OutcomeOut(booking_status=booking.status, decision=DecisionOut.model_validate(decision), message=message)
+
+
+@router.get("/bookings/{booking_id}/documents", response_model=list[DocumentLinkOut])
+async def booking_documents(
+    booking_id: uuid.UUID, user: AuthUser = Depends(get_current_user), session: AsyncSession = Depends(get_session)
+):
+    """Every confirmation, receipt and notice issued for this booking."""
+    booking = await _my_booking(session, user, booking_id)
+    return await list_for_booking(session, booking.id)

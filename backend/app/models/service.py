@@ -7,9 +7,11 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.base import Timestamps, UUIDPrimaryKey
+from app.models.base import Timestamps, UUIDPrimaryKey, one_of
 
-PAYMENT_OPTIONS = ("deposit_held", "full_held")  # MVP options; "pay_now" and "no_hold" come later
+PAYMENT_OPTIONS = ("deposit_held", "full_held")
+SERVICE_KINDS = ("main", "add_on")             # add-ons (e.g. hair wash) can only be booked with a main service
+BOOKING_MODES = ("appointment", "class")       # appointment: times calculated; class: fixed sessions with seats
 
 
 class Service(UUIDPrimaryKey, Timestamps, Base):
@@ -23,6 +25,9 @@ class Service(UUIDPrimaryKey, Timestamps, Base):
             "jsonb_typeof(payment_options) = 'array' AND jsonb_array_length(payment_options) > 0",
             name="has_payment_option",
         ),
+        CheckConstraint(one_of("kind", SERVICE_KINDS), name="kind_valid"),
+        CheckConstraint(one_of("booking_mode", BOOKING_MODES), name="booking_mode_valid"),
+        CheckConstraint("cleanup_minutes BETWEEN 0 AND 240", name="cleanup_range"),
     )
 
     business_id: Mapped[uuid.UUID] = mapped_column(
@@ -30,7 +35,10 @@ class Service(UUIDPrimaryKey, Timestamps, Base):
     )
     name: Mapped[str] = mapped_column(String(120))
     description: Mapped[str | None] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(String(10), default="main", server_default="main")
+    booking_mode: Mapped[str] = mapped_column(String(12), default="appointment", server_default="appointment")
     duration_minutes: Mapped[int] = mapped_column(Integer)
+    cleanup_minutes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # free gap after the visit
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     deposit: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     capacity: Mapped[int] = mapped_column(Integer, default=1, server_default="1")  # >1 for group classes later

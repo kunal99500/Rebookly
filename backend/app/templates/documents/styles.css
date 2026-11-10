@@ -1,0 +1,52 @@
+:root {
+  --bg: #F4F5F8; --surface: #FFFFFF; --ink: #161B2E; --muted: #5C6478; --line: #E1E4EC;
+  --held: #3B4FD8; --held-soft: #ECEFFE; --released: #1F7A55; --released-soft: #E5F4EC;
+  --charged: #A35A06; --charged-soft: #FCF0DF; color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0F1220; --surface: #181C2E; --ink: #E9EBF3; --muted: #9AA1B5; --line: #2A3046;
+    --held: #9AA8FF; --held-soft: #222A52; --released: #7FD3AB; --released-soft: #15332A;
+    --charged: #F2B872; --charged-soft: #3A2A14; color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 "Geist", system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 32rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+.brand { font-weight: 600; font-size: .8rem; color: var(--muted); margin: 0 0 1rem; display: flex; justify-content: space-between; }
+.ticket { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.ticket-top { padding: 1.25rem 1.25rem 1rem; }
+.ticket-bottom { padding: 1rem 1.25rem 1.25rem; }
+.perforation { position: relative; height: 1px; border-top: 2px dashed var(--line); margin: 0 1rem; }
+.perforation::before, .perforation::after { content: ""; position: absolute; top: -11px; width: 20px; height: 20px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); }
+.perforation::before { left: -27px; } .perforation::after { right: -27px; }
+.stamp { display: inline-block; font-weight: 600; font-size: .78rem; padding: .2rem .65rem; border-radius: 99px; letter-spacing: .02em; }
+.stamp.held { background: var(--held-soft); color: var(--held); }
+.stamp.charged { background: var(--charged-soft); color: var(--charged); }
+.stamp.released { background: var(--released-soft); color: var(--released); }
+h1 { font: 700 1.45rem/1.2 "Bricolage Grotesque", system-ui, sans-serif; margin: .6rem 0 .1rem; letter-spacing: -.01em; }
+.sub { color: var(--muted); margin: 0; }
+.headline { font: 700 2rem/1.1 "Bricolage Grotesque", system-ui, sans-serif; margin: 1rem 0 .15rem; }
+.headline.held { color: var(--held); } .headline.charged { color: var(--charged); } .headline.released { color: var(--released); }
+.money { font-family: "Geist Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.section-title { font-size: .75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 1.1rem 0 .4rem; }
+.rows { display: grid; gap: .3rem; }
+.row { display: flex; justify-content: space-between; gap: 1rem; }
+.row span:first-child { color: var(--muted); }
+.row.total { border-top: 1px solid var(--line); padding-top: .45rem; margin-top: .2rem; font-weight: 600; }
+.row.total span:first-child { color: var(--ink); }
+.note { background: var(--bg); border-radius: 10px; padding: .7rem .85rem; font-size: .92rem; margin-top: .75rem; }
+ul.policy { margin: 0; padding-left: 1.1rem; display: grid; gap: .25rem; font-size: .92rem; }
+.qr { display: flex; gap: 1rem; align-items: center; margin-top: .25rem; }
+.qr svg { width: 128px; height: 128px; border-radius: 8px; background: #fff; flex: none; }
+.ref { font: 500 1rem "Geist Mono", ui-monospace, monospace; letter-spacing: .04em; }
+.actions { display: flex; gap: .5rem; margin-top: 1rem; }
+.btn { flex: 1; text-align: center; font: 600 .95rem "Geist", system-ui, sans-serif; padding: .7rem; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-decoration: none; cursor: pointer; }
+.btn.primary { background: var(--held); border-color: transparent; color: #fff; }
+footer { color: var(--muted); font-size: .78rem; margin-top: 1rem; text-align: center; }
+@media print {
+  :root { --bg: #fff; --surface: #fff; --ink: #000; --muted: #444; --line: #bbb; color-scheme: light; }
+  body { background: #fff; } main { max-width: none; padding: 0; }
+  .actions, .no-print { display: none !important; }
+  .ticket { border-color: #999; }
+}

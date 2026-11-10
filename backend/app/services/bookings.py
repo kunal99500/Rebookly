@@ -22,6 +22,7 @@ from app.models import Booking, Business, BusinessPolicy, Client, Payment, Servi
 from app.payments.paypal import PayPalClient, PayPalError
 from app.schemas.client import BookingCreate
 from app.services import audit, schedule
+from app.documents.issue import issue_confirmation, issue_safely
 
 HONOR_PERIOD = timedelta(days=3)
 ACTIVE = ("pending_payment", "confirmed")
@@ -184,6 +185,8 @@ async def authorize_hold(session: AsyncSession, paypal: PayPalClient, booking: B
                  business_id=booking.business_id, booking_id=booking.id,
                  details={"held_amount": str(payment.amount), "method": info.payment_method,
                           "paypal_authorization_id": info.authorization_id})
+
+    await issue_safely(session, issue_confirmation(session, booking))
     await session.commit()
     await session.refresh(booking)
     return booking

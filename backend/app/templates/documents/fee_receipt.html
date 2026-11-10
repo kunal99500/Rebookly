@@ -1,0 +1,14 @@
+{% extends "documents/base.html" %}
+{% block stamp %}<span class="stamp charged">Fee charged</span>{% endblock %}
+{% block headline %}
+<p class="headline charged money">{{ doc.money.charged }}</p>
+<p class="sub">charged under the cancellation policy you agreed to</p>
+{% endblock %}
+{% block body %}
+<div class="rows">
+  <div class="row"><span>Fee charged</span><span class="money">{{ doc.money.charged }}</span></div>
+  <div class="row"><span>Released back to you</span><span class="money">{{ doc.money.released }}</span></div>
+</div>
+{% if doc.decision %}<div class="note"><strong>Why:</strong> {{ doc.decision.reason }}</div>{% endif %}
+<p class="sub no-print" style="margin-top:.75rem;font-size:.88rem">Think this isn&rsquo;t right? Contact {{ doc.business.name }} and ask them to review it.</p>
+{% endblock %}

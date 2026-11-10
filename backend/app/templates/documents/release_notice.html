@@ -1,0 +1,14 @@
+{% extends "documents/base.html" %}
+{% block stamp %}<span class="stamp released">🔓 Hold released</span>{% endblock %}
+{% block headline %}
+<p class="headline released money">{{ doc.money.released }}</p>
+<p class="sub">released back to you. You were not charged.</p>
+{% endblock %}
+{% block body %}
+<div class="rows">
+  <div class="row"><span>Released</span><span class="money">{{ doc.money.released }}</span></div>
+  <div class="row total"><span>Charged</span><span class="money">{{ doc.money.charged }}</span></div>
+</div>
+{% if doc.decision %}<div class="note">{{ doc.decision.reason }}</div>{% endif %}
+<p class="sub" style="margin-top:.75rem;font-size:.88rem">Your bank may take a few days to remove the pending amount.</p>
+{% endblock %}
