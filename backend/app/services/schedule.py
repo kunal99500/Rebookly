@@ -43,11 +43,12 @@ async def generate_slots(session: AsyncSession, business: Business, owner_id: uu
     rules = await get_hours(session, business)
     if not rules:
         raise HTTPException(status.HTTP_409_CONFLICT, "Set your opening hours first")
-    services = list(await session.scalars(
-        select(Service).where(Service.business_id == business.id, Service.is_active.is_(True))
-    ))
+    services = list(await session.scalars(select(Service).where(
+    Service.business_id == business.id, Service.is_active.is_(True), Service.booking_mode == "class",
+    )))
     if not services:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Add at least one service first")
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "Slots are only for class services. Appointment times are calculated automatically.")
 
     now = get_clock().now()
     today = now.astimezone(ZoneInfo(business.timezone)).date()

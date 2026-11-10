@@ -72,3 +72,8 @@ def test_strictest_policy_wins():
     photo_shoot = {"free_cancel_hours": 72}
     assert strictest_policy(business, [None, photo_shoot]) is photo_shoot
     assert strictest_policy(business, [None, None]) is business
+
+def test_add_ons_do_not_limit_payment_options():
+    wash_full_only = line("wash", kind="add_on", minutes=15, price="5", deposit="0", options=("full_held",))
+    plan = plan_visit([HAIRCUT, wash_full_only])
+    assert plan.payment_options == ("deposit_held", "full_held")

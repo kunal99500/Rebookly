@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, Numeric, SmallInteger, String, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, Numeric, SmallInteger, String, UniqueConstraint, func,Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,6 +18,8 @@ class BookingItem(UUIDPrimaryKey, Base):
         CheckConstraint(one_of("kind", ("main", "add_on")), name="kind_valid"),
         CheckConstraint("duration_minutes > 0", name="duration_positive"),
         CheckConstraint("price >= 0 AND deposit >= 0", name="amounts_not_negative"),
+        CheckConstraint("tax_rate IS NULL OR tax_rate BETWEEN 0 AND 100", name="tax_rate_range"),
+        CheckConstraint("tax_amount >= 0", name="tax_amount_not_negative"),
     )
 
     booking_id: Mapped[uuid.UUID] = mapped_column(
@@ -30,4 +32,8 @@ class BookingItem(UUIDPrimaryKey, Base):
     duration_minutes: Mapped[int] = mapped_column(Integer)
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2))
     deposit: Mapped[Decimal] = mapped_column(Numeric(10, 2))
+    # Tax for this service, frozen at booking time. Empty until the business sets up its tax profile.
+    tax_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    tax_amount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0"), server_default="0")
+    price_includes_tax: Mapped[bool | None] = mapped_column(Boolean)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

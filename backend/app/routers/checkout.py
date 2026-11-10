@@ -46,7 +46,9 @@ async def checkout_page(
     settings = get_settings()
     booking = await _signed_booking(booking_id, sig, session)
     business = await session.get(Business, booking.business_id)
-    service = await session.get(Service, booking.service_id)
+    summary = (await bookings.visit_summaries(session, [booking.id])).get(booking.id, "Booking")
+    staff = await bookings.staff_name(session, booking)
+    duration = int((booking.ends_at - booking.starts_at).total_seconds() // 60)
     payment = await session.scalar(select(Payment).where(Payment.booking_id == booking.id, Payment.kind == "hold"))
 
     policy = Policy.from_dict({**booking.policy_snapshot, "version": booking.policy_version})
@@ -54,8 +56,8 @@ async def checkout_page(
     return templates.TemplateResponse(request, "checkout/booking_checkout.html", {
         "booking": booking,
         "business_name": business.name,
-        "service_name": service.name,
-        "duration": service.duration_minutes,
+        "service_name": f"{summary} with {staff}" if staff else summary,
+        "duration": duration,
         "when": local_time(booking.starts_at, business.timezone),
         "free_until": local_time(free_until, business.timezone) if policy.free_cancel_hours else None,
         "held_text": money(booking.held_amount, booking.currency),

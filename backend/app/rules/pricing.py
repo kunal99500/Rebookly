@@ -51,8 +51,10 @@ def plan_visit(lines: list[ServiceLine]) -> VisitPlan:
     if duration > MAX_VISIT_MINUTES:
         raise VisitError("That visit is too long to book in one go")
 
-    options = set(ordered[0].payment_options)
-    for line in ordered[1:]:
+        # Payment options come from the main services; add-ons simply join whatever the client chose.
+    mains = [line for line in ordered if line.kind == "main"]
+    options = set(mains[0].payment_options)
+    for line in mains[1:]:
         options &= set(line.payment_options)
     price = sum((line.price for line in ordered), Decimal("0"))
     deposit = sum((line.deposit for line in ordered), Decimal("0"))

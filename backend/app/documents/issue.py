@@ -20,7 +20,7 @@ from app.clock import get_clock
 from app.config import get_settings
 from app.documents.schemas import DocumentLinkOut
 from app.documents.snapshots import TITLES, build_snapshot, document_number, document_type_for
-from app.models import Booking, Business, Client, Decision, Document, Payment, Service
+from app.models import Booking, BookingItem, Business, Client, Decision, Document, Payment, Staff, Service
 from app.rules.engine import Policy
 from app.rules.formatting import local_time
 from app.rules.outcomes import masked_last4
@@ -30,38 +30,44 @@ logger = logging.getLogger("rebookly.documents")
 
 
 async def _context(session: AsyncSession, booking: Booking) -> dict:
-    """Gather everything a document shows, as plain values."""
-    business = await session.get(Business, booking.business_id)
-    client = await session.get(Client, booking.client_id)
-    service = await session.get(Service, booking.service_id)
-    payment = await session.scalar(select(Payment).where(Payment.booking_id == booking.id, Payment.kind == "hold"))
-    policy = Policy.from_dict({**booking.policy_snapshot, "version": booking.policy_version})
-    tz = business.timezone
-    return {
-        "business": {"name": business.name, "address": business.address, "phone": business.phone, "timezone": tz},
-        "client": {"name": client.name, "phone_masked": masked_last4(client.phone_last4),
-                   "attendee": booking.attendee_name},
-        "booking": {
-            "confirmation_number": booking.confirmation_number, "service": service.name,
-            "duration_minutes": service.duration_minutes, "when": local_time(booking.starts_at, tz),
-            "payment_option": booking.payment_option, "price": str(booking.price),
-            "held": str(booking.held_amount), "currency": booking.currency,
-            "check_in_token": booking.check_in_token,
-        },
-        "payment": {
-            "method": payment.method if payment else None,
-            "card_brand": payment.card_brand if payment else None,
-            "card_last_digits": payment.card_last_digits if payment else None,
-            "paypal_order_id": payment.paypal_order_id if payment else None,
-        },
-        "policy": {
-            "version": policy.version,
-            "lines": policy_summary(policy),
-            "free_until": local_time(booking.starts_at - timedelta(hours=policy.free_cancel_hours), tz)
-            if policy.free_cancel_hours else None,
-        },
-        "timezone": tz,
-    }
+       """Gather everything a document shows, as plain values."""
+       business = await session.get(Business, booking.business_id)
+       client = await session.get(Client, booking.client_id)
+       item_names = list(await session.scalars(
+           select(BookingItem.name).where(BookingItem.booking_id == booking.id).order_by(BookingItem.position)))
+       staff = (await session.scalar(select(Staff.name).where(Staff.id == booking.staff_id))
+                if booking.staff_id else None)
+       payment = await session.scalar(select(Payment).where(Payment.booking_id == booking.id, Payment.kind == "hold"))
+       policy = Policy.from_dict({**booking.policy_snapshot, "version": booking.policy_version})
+       tz = business.timezone
+       return {
+           "business": {"name": business.name, "address": business.address, "phone": business.phone, "timezone": tz},
+           "client": {"name": client.name, "phone_masked": masked_last4(client.phone_last4),
+                      "attendee": booking.attendee_name},
+           "booking": {
+               "confirmation_number": booking.confirmation_number,
+               "service": " + ".join(item_names) or "Booking",
+               "staff": staff,
+               "duration_minutes": int((booking.ends_at - booking.starts_at).total_seconds() // 60),
+               "when": local_time(booking.starts_at, tz),
+               "payment_option": booking.payment_option, "price": str(booking.price),
+               "held": str(booking.held_amount), "currency": booking.currency,
+               "check_in_token": booking.check_in_token,
+           },
+           "payment": {
+               "method": payment.method if payment else None,
+               "card_brand": payment.card_brand if payment else None,
+               "card_last_digits": payment.card_last_digits if payment else None,
+               "paypal_order_id": payment.paypal_order_id if payment else None,
+           },
+           "policy": {
+               "version": policy.version,
+               "lines": policy_summary(policy),
+               "free_until": local_time(booking.starts_at - timedelta(hours=policy.free_cancel_hours), tz)
+               if policy.free_cancel_hours else None,
+           },
+           "timezone": tz,
+       }
 
 
 async def _save(session: AsyncSession, booking: Booking, doc_type: str, decision: Decision | None, **extra) -> Document:

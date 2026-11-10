@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import AvailabilityRule, Business, Service
 from app.schemas.business import BusinessCreate, BusinessUpdate
 from app.services import audit
+from app.services import audit, team
 
 MAX_SLUG_LENGTH = 60
 
@@ -47,6 +48,7 @@ async def create_business(session: AsyncSession, owner_id: uuid.UUID, data: Busi
         session.add(business)
         audit.record(session, actor_type="owner", actor_id=owner_id, action="business.created",
                      business_id=business.id, details={"name": business.name, "category": business.category})
+        await team.ensure_defaults(session, business)
         try:
             await session.commit()
         except IntegrityError:

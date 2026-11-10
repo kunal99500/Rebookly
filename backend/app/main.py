@@ -154,6 +154,7 @@ def create_app() -> FastAPI:
     from app.routers.owner import policies as owner_policies
     from app.routers.owner import schedule as owner_schedule
     from app.routers.owner import services as owner_services
+    from app.routers.owner import team as owner_team
     for module in (owner_businesses, owner_services, owner_policies, owner_schedule,
                    owner_photos, owner_bookings, owner_decisions, owner_dashboard):
         app.include_router(module.router)

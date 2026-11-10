@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ProfileIn(BaseModel):
@@ -21,11 +21,21 @@ class ProfileOut(BaseModel):
 
 
 class BookingCreate(BaseModel):
+    """A visit: one or more services, at a start time taken from the availability endpoint."""
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-    slot_id: uuid.UUID
+    service_ids: list[uuid.UUID] = Field(min_length=1, max_length=10)
+    starts_at: datetime
+    staff_id: uuid.UUID | None = Field(default=None, description="Leave empty for any available staff member")
     payment_option: Literal["deposit_held", "full_held"]
     attendee_name: str | None = Field(default=None, max_length=80)
+
+    @field_validator("starts_at")
+    @classmethod
+    def _aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("starts_at must include a time zone; use a time from the availability endpoint")
+        return value
 
 
 class BookingStarted(BaseModel):
@@ -37,13 +47,20 @@ class BookingStarted(BaseModel):
     checkout_url: str
 
 
-class BookingOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class BookingItemOut(BaseModel):
+    name: str
+    kind: str
+    duration_minutes: int
+    price: Decimal
 
+
+class BookingOut(BaseModel):
     id: uuid.UUID
     status: str
     business_name: str
-    service_name: str
+    service_name: str               # e.g. "Haircut + Hair wash"
+    items: list[BookingItemOut]
+    staff_name: str | None
     starts_at: datetime
     ends_at: datetime
     timezone: str

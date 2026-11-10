@@ -60,6 +60,7 @@ def build_snapshot(
         "booking": {
             "confirmation_number": booking["confirmation_number"],
             "service": booking["service"],
+            "staff": booking.get("staff"),
             "duration_minutes": booking["duration_minutes"],
             "when": booking["when"],
             "payment_option": booking["payment_option"],

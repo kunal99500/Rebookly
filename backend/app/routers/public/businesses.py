@@ -1,29 +1,28 @@
-"""Public API (no sign-in): a live business's booking page data and its free slots."""
+"""Public API (no sign-in): a live business's booking page, its free times, and class sessions."""
 import uuid
 
-from backend.app.auth.supabase_auth import AuthUser
-from backend.app.routers.owner import businesses
-from backend.app.routers.owner.deps import get_owned_business, get_owner
-from backend.app.schemas.business import BusinessOut
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.config import get_settings
 
 from app.clock import get_clock
 from app.db import get_session
 from app.media import photos
 from app.models import Business, Service
 from app.rules.policy_text import policy_summary
+from app.schemas.availability import AvailabilityOut, AvailabilityRequest, StaffChoice, TimeChoice
 from app.schemas.public import (
     PublicBusinessOut, PublicPhotoOut, PublicPolicyOut, PublicRatingOut, PublicServiceOut, PublicSlotOut,
 )
-from app.services import offerings, policies, schedule
+from app.services import availability, offerings, policies, schedule
 
 router = APIRouter(prefix="/api/public/businesses", tags=["public"])
 
 
+# ---------- shared helpers ----------
+
 async def get_live_business(slug: str, session: AsyncSession = Depends(get_session)) -> Business:
+    """Only live businesses are visible to the public. Drafts and paused businesses return "not found"."""
     business = await session.scalar(select(Business).where(Business.slug == slug, Business.status == "live"))
     if business is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Business not found")
@@ -37,6 +36,8 @@ def _photo(storage, photo) -> PublicPhotoOut:
         width=photo.width, height=photo.height, alt_text=photo.alt_text,
     )
 
+
+# ---------- the booking page ----------
 
 @router.get("/{slug}", response_model=PublicBusinessOut)
 async def business_page(
@@ -75,38 +76,50 @@ async def business_page(
     )
 
 
+# ---------- appointments: times calculated from the services chosen ----------
+
+@router.post("/{slug}/availability", response_model=AvailabilityOut)
+async def available_times(
+    data: AvailabilityRequest,
+    business: Business = Depends(get_live_business),
+    session: AsyncSession = Depends(get_session),
+):
+    """Start times where the whole visit fits, with who is free at each time.
+
+    Send the services the client picked (e.g. haircut + wash). Price, deposit and length are worked out here.
+    """
+    plan, staff, options = await availability.available_times(
+        session, business, data.service_ids, data.staff_id, get_clock().now())
+    names = {s.id: s.name for s in staff}
+    return AvailabilityOut(
+        duration_minutes=plan.duration_minutes, price=plan.price, deposit=plan.deposit, currency=business.currency,
+        payment_options=list(plan.payment_options),
+        staff_choices=[StaffChoice(id=s.id, name=s.name) for s in staff],
+        times=[TimeChoice(starts_at=o.starts_at, ends_at=o.ends_at,
+                          staff=[StaffChoice(id=i, name=names[i]) for i in o.staff_ids]) for o in options],
+    )
+
+
+# ---------- classes: fixed sessions with seats ----------
+
 @router.get("/{slug}/services/{service_id}/slots", response_model=list[PublicSlotOut])
 async def free_slots(
     service_id: uuid.UUID,
     business: Business = Depends(get_live_business),
     session: AsyncSession = Depends(get_session),
 ):
-    """Times that can be booked right now: within the booking window, not full, and the provider is free."""
+    """Class sessions that can be booked right now: within the booking window, not full, and not blocked.
+
+    Appointment services don't use pre-made slots; use the availability endpoint for those.
+    """
     service = await session.scalar(select(Service).where(
         Service.id == service_id, Service.business_id == business.id, Service.is_active.is_(True)
     ))
     if service is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Service not found")
+    if service.booking_mode != "class":
+        raise HTTPException(status.HTTP_409_CONFLICT,
+                            "This service is booked by appointment. Use the availability endpoint instead.")
     slots = await schedule.available_slots(session, business, service, get_clock().now())
     return [PublicSlotOut(id=s.id, starts_at=s.starts_at, ends_at=s.ends_at, seats_left=s.capacity - s.booked_count)
             for s in slots]
-
-
-@router.post("/{business_id}/go-live", response_model=BusinessOut)
-async def go_live(
-    business: Business = Depends(get_owned_business),
-    owner: AuthUser = Depends(get_owner),
-    session: AsyncSession = Depends(get_session),
-):
-    """Open the business for bookings. Lists anything still missing if it isn't ready."""
-    return await businesses.go_live(session, business, owner.id, get_settings().paypal_single_merchant)
-
-
-@router.post("/{business_id}/pause", response_model=BusinessOut)
-async def pause(
-    business: Business = Depends(get_owned_business),
-    owner: AuthUser = Depends(get_owner),
-    session: AsyncSession = Depends(get_session),
-):
-    """Stop taking new bookings. Existing bookings stay as they are."""
-    return await businesses.pause(session, business, owner.id)

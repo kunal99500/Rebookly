@@ -17,7 +17,7 @@
     <div class="ticket-top">
       {% block stamp %}{% endblock %}
       <h1>{{ doc.business.name }}</h1>
-      <p class="sub">{{ doc.booking.service }} · {{ doc.booking.duration_minutes }} min</p>
+      <p class="sub">{{ doc.booking.service }} · {{ doc.booking.duration_minutes }} min{% if doc.booking.staff %} · with {{ doc.booking.staff }}{% endif %}</p>
       <p class="sub">{{ doc.booking.when }} <span style="opacity:.75">({{ doc.business.timezone }})</span></p>
       {% block headline %}{% endblock %}
     </div>

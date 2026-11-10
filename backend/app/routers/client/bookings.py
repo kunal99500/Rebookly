@@ -9,9 +9,9 @@ from app.auth.dependencies import get_current_user
 from app.auth.supabase_auth import AuthUser
 from app.config import get_settings
 from app.db import get_session
-from app.models import Booking, Business, Service
+from app.models import Booking, Business, Service,BookingItem
 from app.rules.engine import Action, Event
-from app.schemas.client import BookingCreate, BookingOut, BookingStarted, ProfileIn, ProfileOut
+from app.schemas.client import BookingCreate, BookingItemOut, BookingOut, BookingStarted, ProfileIn, ProfileOut
 from app.schemas.outcome import CancelPreviewOut, DecisionOut, OutcomeOut
 from app.security.links import checkout_signature
 from app.security.phone import mask_phone
@@ -74,15 +74,20 @@ async def start_booking(
 
 
 async def _booking_out(session: AsyncSession, booking: Booking) -> BookingOut:
-    business = await session.get(Business, booking.business_id)
-    service = await session.get(Service, booking.service_id)
-    return BookingOut(
-        id=booking.id, status=booking.status, business_name=business.name, service_name=service.name,
-        starts_at=booking.starts_at, ends_at=booking.ends_at, timezone=business.timezone,
-        price=booking.price, held_amount=booking.held_amount, currency=booking.currency,
-        payment_option=booking.payment_option, confirmation_number=booking.confirmation_number,
-        attendee_name=booking.attendee_name,
-    )
+       business = await session.get(Business, booking.business_id)
+       items = list(await session.scalars(
+           select(BookingItem).where(BookingItem.booking_id == booking.id).order_by(BookingItem.position)))
+       return BookingOut(
+           id=booking.id, status=booking.status, business_name=business.name,
+           service_name=" + ".join(i.name for i in items) or "Booking",
+           items=[BookingItemOut(name=i.name, kind=i.kind, duration_minutes=i.duration_minutes, price=i.price)
+                  for i in items],
+           staff_name=await bookings.staff_name(session, booking),
+           starts_at=booking.starts_at, ends_at=booking.ends_at, timezone=business.timezone,
+           price=booking.price, held_amount=booking.held_amount, currency=booking.currency,
+           payment_option=booking.payment_option, confirmation_number=booking.confirmation_number,
+           attendee_name=booking.attendee_name,
+       )
 
 
 @router.get("/bookings", response_model=list[BookingOut])

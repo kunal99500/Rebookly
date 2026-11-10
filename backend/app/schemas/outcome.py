@@ -65,6 +65,7 @@ class OwnerBookingOut(BaseModel):
     id: uuid.UUID
     status: str
     service_name: str
+    staff_name: str | None
     starts_at: datetime
     ends_at: datetime
     client_name: str
