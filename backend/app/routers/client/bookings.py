@@ -16,6 +16,11 @@ from app.schemas.outcome import CancelPreviewOut, DecisionOut, OutcomeOut
 from app.security.links import checkout_signature
 from app.security.phone import mask_phone
 from app.services import bookings, clients, outcomes
+from datetime import date
+
+from fastapi import Query
+from app.schemas.client import RescheduleIn, RescheduleOption
+from app.services import rescheduling
 
 from app.documents.issue import list_for_booking
 from app.documents.schemas import DocumentLinkOut
@@ -152,3 +157,31 @@ async def booking_documents(
     """Every confirmation, receipt and notice issued for this booking."""
     booking = await _my_booking(session, user, booking_id)
     return await list_for_booking(session, booking.id)
+
+
+@router.get("/bookings/{booking_id}/reschedule-options", response_model=list[RescheduleOption])
+async def reschedule_options(
+       booking_id: uuid.UUID,
+       day: date | None = Query(default=None, description="Only this day (in the business's time zone)"),
+       staff_id: uuid.UUID | None = None,
+       user: AuthUser = Depends(get_current_user),
+       session: AsyncSession = Depends(get_session),
+   ):
+       """Times you can move this booking to: same services, same hold, same policy."""
+       booking = await _my_booking(session, user, booking_id)
+       if booking.status != "confirmed":
+           raise HTTPException(status.HTTP_409_CONFLICT, "Only confirmed bookings can be moved")
+       times = await rescheduling.options(session, booking, day, staff_id)
+       return [RescheduleOption(starts_at=t.starts_at, ends_at=t.ends_at) for t in times]
+
+
+@router.post("/bookings/{booking_id}/reschedule", response_model=BookingOut)
+async def reschedule(
+       booking_id: uuid.UUID, data: RescheduleIn,
+       user: AuthUser = Depends(get_current_user),
+       session: AsyncSession = Depends(get_session),
+   ):
+       """Move your booking. Allowed before your free-cancellation cutoff; you'll get a new confirmation."""
+       booking = await _my_booking(session, user, booking_id)
+       moved = await rescheduling.reschedule(session, booking.id, data.starts_at, data.staff_id, "client", user.id)
+       return await _booking_out(session, moved)

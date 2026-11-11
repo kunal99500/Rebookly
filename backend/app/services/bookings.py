@@ -30,6 +30,7 @@ from app.rules.booking import (
 from app.rules.pricing import VisitError, strictest_policy
 from app.schemas.client import BookingCreate
 from app.services import audit, availability
+from app.compliance import profiles as tax_profiles
 
 HONOR_PERIOD = timedelta(days=3)
 ACTIVE = ("pending_payment", "confirmed")
@@ -60,9 +61,15 @@ async def create_booking(session: AsyncSession, client: Client, data: BookingCre
         raise _conflict("Sorry, that time is no longer available. Please pick another.")
     chosen = next(s for s in staff if s.id == match.staff_ids[0])  # first free person, in the owner's order
     try:
-        held = plan.hold_for(data.payment_option)
+           plan.hold_for(data.payment_option)  # checks this payment option is allowed for these services
     except VisitError as err:
-        raise _conflict(str(err))
+           raise _conflict(str(err))
+
+       # Tax from the business's tax profile (none if not registered). The client pays the gross total.
+    taxes, tax_profile = await tax_profiles.visit_tax(session, business.id, [line.price for line in plan.lines])
+    total = taxes.gross_total
+    held = plan.deposit if data.payment_option == "deposit_held" else total
+    tax_rate = tax_profile.tax_rate if tax_profile and tax_profile.tax_registered else None
 
     active = await session.scalar(select(func.count()).select_from(Booking).where(
         Booking.client_id == client.id, Booking.business_id == business.id,
@@ -83,7 +90,7 @@ async def create_booking(session: AsyncSession, client: Client, data: BookingCre
         attendee_name=data.attendee_name,
         status="pending_payment",
         payment_option=data.payment_option,
-        price=plan.price,
+        price=total,
         held_amount=held,
         currency=business.currency,
         policy_version=policy.version,
@@ -95,11 +102,13 @@ async def create_booking(session: AsyncSession, client: Client, data: BookingCre
         check_in_token=new_check_in_token(),
     )
     session.add(booking)
-    for position, line in enumerate(plan.lines, start=1):
+    for position, (line, tax) in enumerate(zip(plan.lines, taxes.lines), start=1):
         session.add(BookingItem(
             booking_id=booking.id, service_id=line.service_id, position=position, kind=line.kind,
             name=line.name, duration_minutes=line.duration_minutes, price=line.price, deposit=line.deposit,
-        ))
+            tax_rate=tax_rate, tax_amount=tax.tax,
+            price_includes_tax=tax_profile.prices_include_tax if tax_rate is not None else None,
+           ))
     audit.record(session, actor_type="client", actor_id=client.auth_user_id, action="booking.started",
                  business_id=business.id, booking_id=booking.id,
                  details={"staff_id": str(chosen.id), "services": len(plan.lines), "held_amount": str(held)})

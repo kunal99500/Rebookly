@@ -176,3 +176,31 @@ async def run_jobs(request: Request):
     if runner is None:
         raise HTTPException(503, "Background jobs are off. Set ENABLE_JOBS=true and restart.")
     return await runner.run_all()
+
+
+# ---------- AI connection check ----------
+
+from pydantic import BaseModel as _BaseModel  # noqa: E402
+
+from app.ai import prompts  # noqa: E402
+from app.ai.client import AIOutputError, AIUnavailable  # noqa: E402
+
+
+class AIPingOut(_BaseModel):
+    greeting: str = Field(min_length=1, max_length=200)
+    word_count: int = Field(ge=1, le=100)
+
+
+@router.post("/api/dev/ai/ping", response_model=AIPingOut)
+async def ai_ping(request: Request, business_name: str = Query("Lumen Fitness", max_length=80)):
+    """Makes one real AI call through the full pipeline: prompt, OpenAI, validation, Langfuse, ai_usage."""
+    ai = getattr(request.app.state, "ai", None)
+    if ai is None:
+        raise HTTPException(503, "AI is not configured. Set LLM_API_KEY and LLM_MODEL.")
+    try:
+        return await ai.complete_json(
+            feature="ping", system=prompts.render("ping", business_name=business_name),
+            user="Please reply now.", schema=AIPingOut, tier="fast",
+        )
+    except (AIUnavailable, AIOutputError) as err:
+        raise HTTPException(502, f"AI call failed: {err}")

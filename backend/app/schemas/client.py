@@ -70,3 +70,24 @@ class BookingOut(BaseModel):
     payment_option: str
     confirmation_number: str | None
     attendee_name: str | None
+
+
+
+class RescheduleIn(BaseModel):
+    """Move a booking to a time taken from the reschedule-options endpoint."""
+    model_config = ConfigDict(extra="forbid")
+
+    starts_at: datetime
+    staff_id: uuid.UUID | None = Field(default=None, description="Leave empty to keep your staff member if free")
+
+    @field_validator("starts_at")
+    @classmethod
+    def _aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("starts_at must include a time zone; use a time from reschedule-options")
+        return value
+
+
+class RescheduleOption(BaseModel):
+    starts_at: datetime
+    ends_at: datetime

@@ -45,7 +45,7 @@ def amounts(doc_type: str, price: Decimal, held: Decimal, charged: Decimal) -> d
 def build_snapshot(
     doc_type: str, *, number: str, issued_at: datetime, issued_local: str,
     business: dict, client: dict, booking: dict, payment: dict, policy: dict,
-    charged: Decimal = ZERO, decision: dict | None = None,
+    charged: Decimal = ZERO, decision: dict | None = None, tax: dict | None = None,
 ) -> dict:
     currency = booking["currency"]
     sums = amounts(doc_type, Decimal(booking["price"]), Decimal(booking["held"]), Decimal(charged))
@@ -77,4 +77,6 @@ def build_snapshot(
         snapshot["decision"] = decision    # reason, rule (from the rules engine)
     if doc_type == "booking_confirmation":
         snapshot["check_in_token"] = booking["check_in_token"]  # shown as the QR code
+    if tax:
+        snapshot["tax"] = tax              # tax line, registration number, legal name (frozen)
     return snapshot

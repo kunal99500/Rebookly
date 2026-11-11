@@ -1,0 +1,8 @@
+{% if doc.tax %}
+<p class="section-title">Tax</p>
+<div class="rows">
+  <div class="row"><span>{{ doc.tax.line }}</span><span class="money">{{ doc.tax.amount }}</span></div>
+  {% if doc.tax.registration_number %}<div class="row"><span>{{ doc.tax.registration_label }}</span><span class="ref">{{ doc.tax.registration_number }}</span></div>{% endif %}
+  {% if doc.tax.legal_name %}<div class="row"><span>Registered name</span><span>{{ doc.tax.legal_name }}</span></div>{% endif %}
+</div>
+{% endif %}

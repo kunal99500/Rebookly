@@ -15,6 +15,11 @@ from datetime import timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from decimal import Decimal
+
+from app.compliance import profiles as tax_profiles
+from app.compliance.countries import get_pack
+from app.compliance.tax import receipt_tax_section, tax_for_price
 
 from app.clock import get_clock
 from app.config import get_settings
@@ -69,34 +74,65 @@ async def _context(session: AsyncSession, booking: Booking) -> dict:
            "timezone": tz,
        }
 
+async def _tax_section(session: AsyncSession, booking: Booking, doc_type: str, charged: Decimal) -> dict | None:
+       """The tax block for this document, or None. Release notices never show tax (nothing was charged)."""
+       if doc_type == "release_notice":
+           return None
+       profile = await tax_profiles.get_profile(session, booking.business_id)
+       registration = {
+           "registration_label": get_pack(profile.country_code).registration_label if profile else None,
+           "registration_number": profile.registration_number if profile else None,
+           "legal_name": profile.legal_name if profile else None,
+       }
+       if doc_type == "fee_receipt":
+           # Only if the owner has said fees are taxable; a fee is a final amount, so the tax is inside it.
+           if not (profile and profile.tax_registered and profile.fees_taxable and profile.tax_rate is not None):
+               return None
+           line = tax_for_price(Decimal(charged), profile.tax_rate, prices_include_tax=True)
+           return receipt_tax_section(label=profile.tax_label, rate=profile.tax_rate, prices_include_tax=True,
+                                      amount=line.tax, currency=booking.currency, **registration)
+       items = [i for i in await session.scalars(select(BookingItem).where(BookingItem.booking_id == booking.id))
+                if i.tax_rate is not None]
+       if not items:
+           return None
+       return receipt_tax_section(
+           label=profile.tax_label if profile else "Tax", rate=items[0].tax_rate,
+           prices_include_tax=bool(items[0].price_includes_tax), amount=sum(i.tax_amount for i in items),
+           currency=booking.currency, on_visit_total=True, **registration,
+       )
 
-async def _save(session: AsyncSession, booking: Booking, doc_type: str, decision: Decision | None, **extra) -> Document:
+async def _save(session: AsyncSession, booking: Booking, doc_type: str, decision: Decision | None,
+                   replaces: Document | None = None, **extra) -> Document:
     sequence = 1 + await session.scalar(select(func.count()).select_from(Document).where(
         Document.booking_id == booking.id, Document.type == doc_type))
     number = document_number(booking.confirmation_number, doc_type, sequence)
     now = get_clock().now()
     context = await _context(session, booking)
+    tax = await _tax_section(session, booking, doc_type, extra.get("charged", Decimal("0")))
     snapshot = build_snapshot(
-        doc_type, number=number, issued_at=now, issued_local=local_time(now, context["timezone"]),
-        business=context["business"], client=context["client"], booking=context["booking"],
-        payment=context["payment"], policy=context["policy"], **extra,
-    )
+           doc_type, number=number, issued_at=now, issued_local=local_time(now, context["timezone"]),
+           business=context["business"], client=context["client"], booking=context["booking"],
+           payment=context["payment"], policy=context["policy"], tax=tax, **extra,
+       )
     document = Document(
         id=uuid.uuid4(), business_id=booking.business_id, booking_id=booking.id,
         decision_id=decision.id if decision else None, type=doc_type, number=number,
         snapshot=snapshot, access_token=secrets.token_urlsafe(32),
+        replaces_document_id=replaces.id if replaces else None,
     )
     session.add(document)
     await session.flush()
     return document
 
 
-async def issue_confirmation(session: AsyncSession, booking: Booking) -> Document:
-    existing = await session.scalar(select(Document).where(
-        Document.booking_id == booking.id, Document.type == "booking_confirmation"))
-    if existing is not None:
-        return existing
-    return await _save(session, booking, "booking_confirmation", None)
+async def issue_confirmation(session: AsyncSession, booking: Booking, replace: bool = False) -> Document:
+       """The booking confirmation. With replace=True (after a move), a new one is issued for the new time."""
+       existing = await session.scalar(
+           select(Document).where(Document.booking_id == booking.id, Document.type == "booking_confirmation")
+           .order_by(Document.issued_at.desc()).limit(1))
+       if existing is not None and not replace:
+           return existing
+       return await _save(session, booking, "booking_confirmation", None, replaces=existing)
 
 
 async def issue_for_decision(session: AsyncSession, decision: Decision) -> Document | None:

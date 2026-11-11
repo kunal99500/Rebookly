@@ -1,0 +1,1 @@
+"""Country-specific business details: tax registration numbers, tax labels, and tax on receipts."""

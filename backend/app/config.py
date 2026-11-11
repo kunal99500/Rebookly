@@ -39,14 +39,29 @@ class Settings(BaseSettings):
     database_url: SecretStr = SecretStr("")
     supabase_jwt_secret: SecretStr = SecretStr("")  # only for projects still on legacy HS256 tokens
 
-        # ===== Data protection =====
+    # ===== Data protection =====
     data_encryption_key: SecretStr = SecretStr("")  # one key, or several separated by commas (newest first)
     phone_hash_key: SecretStr = SecretStr("")
 
-    # ===== AI (Phase 3) =====
-    llm_provider: str = ""
+        # ===== AI =====
+    llm_provider: str = "openai"
     llm_api_key: SecretStr = SecretStr("")
-    llm_model: str = ""
+    llm_model: str = ""                 # "smart" tier: onboarding, policy parsing, assistant
+    llm_model_fast: str = ""            # "fast" tier: simple, cheap tasks (falls back to llm_model)
+    ai_timeout_seconds: float = 30
+    ai_max_output_tokens: int = 8000    # includes the model's reasoning; too low can mean empty replies
+
+    # ===== AI monitoring (Langfuse) =====
+    langfuse_public_key: str = ""
+    langfuse_secret_key: SecretStr = SecretStr("")
+    langfuse_base_url: str = "https://cloud.langfuse.com"
+    langfuse_capture_content: bool = True   # false = send timings and tokens only, no prompt text
+
+        # ===== Location (geocoding) =====
+    geocoder_base_url: str = "https://nominatim.openstreetmap.org"
+    geocoder_api_key: SecretStr = SecretStr("")      # needed for paid providers such as LocationIQ
+    geocoder_user_agent: str = "Rebookly/0.1 (contact: change-me@example.com)"
+    geocoder_min_interval_seconds: float = 1.0      # Nominatim's public server: about 1 request per second
 
     # ===== Development only =====
     enable_dev_routes: bool = False

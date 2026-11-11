@@ -28,6 +28,10 @@ class AvailabilityOut(BaseModel):
     duration_minutes: int
     price: Decimal
     deposit: Decimal
+    tax_label: str | None          # e.g. "GST"; None when the business doesn't charge tax
+    tax_amount: Decimal
+    prices_include_tax: bool
+    total_price: Decimal           # what the client pays for the whole visit
     currency: str
     payment_options: list[str]
     staff_choices: list[StaffChoice]   # everyone who can do this combination

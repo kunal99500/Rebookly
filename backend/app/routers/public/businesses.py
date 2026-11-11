@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import get_clock
+from app.compliance import profiles as tax_profiles
 from app.db import get_session
 from app.media import photos
 from app.models import Business, Service
@@ -86,13 +87,23 @@ async def available_times(
 ):
     """Start times where the whole visit fits, with who is free at each time.
 
-    Send the services the client picked (e.g. haircut + wash). Price, deposit and length are worked out here.
+    Send the services the client picked (e.g. haircut + wash). Price, tax, deposit and length are worked out here,
+    so the client sees the real total before booking.
     """
     plan, staff, options = await availability.available_times(
         session, business, data.service_ids, data.staff_id, get_clock().now())
+    taxes, tax_profile = await tax_profiles.visit_tax(session, business.id, [line.price for line in plan.lines])
+    charges_tax = bool(tax_profile and tax_profile.tax_registered)
     names = {s.id: s.name for s in staff}
     return AvailabilityOut(
-        duration_minutes=plan.duration_minutes, price=plan.price, deposit=plan.deposit, currency=business.currency,
+        duration_minutes=plan.duration_minutes,
+        price=plan.price,
+        deposit=plan.deposit,
+        tax_label=tax_profile.tax_label if charges_tax else None,
+        tax_amount=taxes.tax_total,
+        prices_include_tax=tax_profile.prices_include_tax if charges_tax else True,
+        total_price=taxes.gross_total,
+        currency=business.currency,
         payment_options=list(plan.payment_options),
         staff_choices=[StaffChoice(id=s.id, name=s.name) for s in staff],
         times=[TimeChoice(starts_at=o.starts_at, ends_at=o.ends_at,

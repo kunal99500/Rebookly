@@ -21,3 +21,5 @@ from app.models.location import Location  # noqa: F401
 from app.models.resource import Resource  # noqa: F401
 from app.models.staff import Staff, StaffHours, StaffService  # noqa: F401
 from app.models.time_off import TimeOff  # noqa: F401
+from app.models.ai_usage import AIUsage  # noqa: F401
+from app.models.tax_profile import BusinessTaxProfile  # noqa: F401

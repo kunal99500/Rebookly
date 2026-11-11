@@ -26,6 +26,10 @@ class Business(UUIDPrimaryKey, Timestamps, Base):
         CheckConstraint("rating_count >= 0", name="rating_count_not_negative"),
         CheckConstraint("start_interval_minutes IN (5, 10, 15, 20, 30, 60)", name="start_interval_valid"),
         CheckConstraint("min_notice_minutes BETWEEN 0 AND 10080", name="min_notice_range"),
+        CheckConstraint("country_code IS NULL OR country_code ~ '^[A-Z]{2}$'", name="country_code_format"),
+        CheckConstraint("location_source IS NULL OR " + one_of("location_source", ("gps", "search", "manual")),
+                           name="location_source_valid"),
+        CheckConstraint("(latitude IS NULL) = (longitude IS NULL)", name="coordinates_together"),
     )
 
     # The owner's Supabase login ID. Only this user can manage the business.
@@ -42,7 +46,12 @@ class Business(UUIDPrimaryKey, Timestamps, Base):
     currency: Mapped[str] = mapped_column(String(3), default="USD", server_default="USD")
 
     phone: Mapped[str | None] = mapped_column(String(32))
-    address: Mapped[str | None] = mapped_column(String(300))
+    address: Mapped[str | None] = mapped_column(String(300))           # street and number
+    country_code: Mapped[str | None] = mapped_column(String(2))         # ISO, e.g. "IN"
+    region_code: Mapped[str | None] = mapped_column(String(10))         # ISO 3166-2, e.g. "IN-MH"
+    city: Mapped[str | None] = mapped_column(String(100))
+    postal_code: Mapped[str | None] = mapped_column(String(20))
+    location_source: Mapped[str | None] = mapped_column(String(10))     # gps, search or manual
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
     listed_publicly: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
@@ -63,5 +72,5 @@ class Business(UUIDPrimaryKey, Timestamps, Base):
         back_populates="business", cascade="all, delete-orphan", order_by="Service.sort_order"
     )
     policies: Mapped[list["BusinessPolicy"]] = relationship(
-        back_populates="business", cascade="all, delete-orphan", order_by="BusinessPolicy.version"
+    back_populates="business", cascade="all, delete-orphan", order_by="BusinessPolicy.version"
     )
