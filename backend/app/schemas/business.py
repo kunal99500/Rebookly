@@ -52,6 +52,8 @@ class BusinessUpdate(BaseModel):
     privacy_mode: bool | None = None
     listed_publicly: bool | None = None
     vocabulary: dict[str, str] | None = None
+    deposit_notice_timing: Literal["business_page", "booking_start", "checkout"] | None = None
+    deposit_notice_note: str | None = Field(default=None, max_length=300)
 
     @model_validator(mode="after")
     def _no_empty_required_fields(self) -> "BusinessUpdate":
@@ -100,3 +102,5 @@ class BusinessOut(BaseModel):
     rating_count: int
     created_at: datetime
     updated_at: datetime
+    deposit_notice_timing: str
+    deposit_notice_note: str | None

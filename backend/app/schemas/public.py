@@ -22,6 +22,8 @@ class PublicServiceOut(BaseModel):
     price: Decimal
     deposit: Decimal
     payment_options: list[str]
+    kind: str = "main"                  # "add_on" services are shown as extras
+    booking_mode: str = "appointment"
     photo: PublicPhotoOut | None = None
 
 
@@ -35,6 +37,12 @@ class PublicPolicyOut(BaseModel):
 class PublicRatingOut(BaseModel):
     average: Decimal | None     # None until the business has reviews ("New")
     count: int
+
+
+class PublicDepositNotice(BaseModel):
+      timing: str                         # business_page, booking_start or checkout
+      banner: str | None                  # shown on the business page when timing is business_page
+      owner_note: str | None
 
 
 class PublicBusinessOut(BaseModel):
@@ -51,6 +59,7 @@ class PublicBusinessOut(BaseModel):
     rating: PublicRatingOut
     services: list[PublicServiceOut]
     policy: PublicPolicyOut
+    deposit_notice: PublicDepositNotice
 
 
 class PublicSlotOut(BaseModel):

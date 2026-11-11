@@ -23,6 +23,18 @@ class TimeChoice(BaseModel):
     ends_at: datetime
     staff: list[StaffChoice]   # who is free at this time (first = suggested)
 
+class NoticeLine(BaseModel):
+    label: str
+    amount: str
+
+
+class DepositNoticeOut(BaseModel):
+    title: str
+    summary: str
+    lines: list[NoticeLine]
+    policy: list[str]
+    owner_note: str | None
+    payment_option: str
 
 class AvailabilityOut(BaseModel):
     duration_minutes: int
@@ -34,5 +46,7 @@ class AvailabilityOut(BaseModel):
     total_price: Decimal           # what the client pays for the whole visit
     currency: str
     payment_options: list[str]
+    deposit_notice: DepositNoticeOut       # exact amounts for these services, written by code
+    show_notice_before_times: bool         # true: show it as a popup before the time picker
     staff_choices: list[StaffChoice]   # everyone who can do this combination
     times: list[TimeChoice]

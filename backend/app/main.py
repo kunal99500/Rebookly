@@ -21,6 +21,7 @@ from app.media.storage import SupabaseStorage
 from app.payments.paypal import PayPalClient
 from app.security.phone import PhoneProtector
 
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(name)s  %(message)s")
 logger = logging.getLogger("rebookly")
 
@@ -200,7 +201,8 @@ def create_app() -> FastAPI:
     from app.routers.public import compliance as public_compliance
     from app.routers.public import documents as public_documents
     from app.routers.public import geo as public_geo
-    for module in (public_businesses, public_compliance, public_documents, public_geo):
+    from app.routers.public import search as public_search
+    for module in (public_businesses, public_compliance, public_documents, public_geo,public_search):
         app.include_router(module.router)
 
     # ---------- Checkout (signed links, no sign-in) ----------
@@ -227,7 +229,7 @@ def create_app() -> FastAPI:
     for module in (
         # Setting up the business
         owner_businesses, owner_location, owner_compliance, owner_services, owner_policies,
-        owner_schedule, owner_team, owner_photos,
+        owner_schedule, owner_team, owner_photos, owner_onboarding,
         # Running it day to day
         owner_bookings, owner_decisions, owner_dashboard,
     ):

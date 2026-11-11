@@ -30,6 +30,8 @@ class Business(UUIDPrimaryKey, Timestamps, Base):
         CheckConstraint("location_source IS NULL OR " + one_of("location_source", ("gps", "search", "manual")),
                            name="location_source_valid"),
         CheckConstraint("(latitude IS NULL) = (longitude IS NULL)", name="coordinates_together"),
+        CheckConstraint(one_of("deposit_notice_timing", ("business_page", "booking_start", "checkout")),
+                           name="deposit_notice_timing_valid"),
     )
 
     # The owner's Supabase login ID. Only this user can manage the business.
@@ -67,6 +69,9 @@ class Business(UUIDPrimaryKey, Timestamps, Base):
            # Scheduling: start times are offered every N minutes, and never sooner than the minimum notice.
     start_interval_minutes: Mapped[int] = mapped_column(Integer, default=15, server_default="15")
     min_notice_minutes: Mapped[int] = mapped_column(Integer, default=60, server_default="60")
+           # When clients see the deposit notice (it always appears at checkout too), and an optional note.
+    deposit_notice_timing: Mapped[str] = mapped_column(String(16), default="booking_start", server_default="booking_start")
+    deposit_notice_note: Mapped[str | None] = mapped_column(String(300))
     rating_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     services: Mapped[list["Service"]] = relationship(
         back_populates="business", cascade="all, delete-orphan", order_by="Service.sort_order"

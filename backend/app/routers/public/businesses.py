@@ -10,10 +10,15 @@ from app.compliance import profiles as tax_profiles
 from app.db import get_session
 from app.media import photos
 from app.models import Business, Service
+from app.rules.deposit_notice import build_notice
+from app.rules.engine import Policy
+from app.rules.formatting import money
 from app.rules.policy_text import policy_summary
-from app.schemas.availability import AvailabilityOut, AvailabilityRequest, StaffChoice, TimeChoice
+from app.rules.pricing import strictest_policy
+from app.schemas.availability import AvailabilityOut, AvailabilityRequest, DepositNoticeOut, StaffChoice, TimeChoice
 from app.schemas.public import (
-    PublicBusinessOut, PublicPhotoOut, PublicPolicyOut, PublicRatingOut, PublicServiceOut, PublicSlotOut,
+    PublicBusinessOut, PublicDepositNotice, PublicPhotoOut, PublicPolicyOut, PublicRatingOut, PublicServiceOut,
+    PublicSlotOut,
 )
 from app.services import availability, offerings, policies, schedule
 
@@ -44,7 +49,7 @@ def _photo(storage, photo) -> PublicPhotoOut:
 async def business_page(
     request: Request, business: Business = Depends(get_live_business), session: AsyncSession = Depends(get_session)
 ):
-    """Everything the booking page needs: photos, services, prices, rating, and the policy in plain words."""
+    """Everything the booking page needs: photos, services, prices, rating, policy, and the deposit notice setting."""
     stored = await policies.get_policy(session, business, business.current_policy_version)
     engine_policy = policies.to_engine_policy(stored.rules, stored.version)
     services = await offerings.list_services(session, business, include_inactive=False)
@@ -54,6 +59,12 @@ async def business_page(
     cover = next((p for p in all_photos if p.kind == "cover"), None)
     gallery = [p for p in all_photos if p.kind == "gallery"]
     service_photos = {p.service_id: p for p in all_photos if p.kind == "service"}
+
+    holds = policies.holds_for([s for s in services if s.kind == "main"])
+    banner = None
+    if business.deposit_notice_timing == "business_page" and holds:
+        banner = (f"A deposit from {money(min(holds), business.currency)} is held when you book. "
+                  "It isn't charged now.")
 
     return PublicBusinessOut(
         name=business.name, slug=business.slug, description=business.description, category=business.category,
@@ -66,6 +77,7 @@ async def business_page(
             PublicServiceOut(
                 id=s.id, name=s.name, description=s.description, duration_minutes=s.duration_minutes,
                 price=s.price, deposit=s.deposit, payment_options=s.payment_options,
+                kind=s.kind, booking_mode=s.booking_mode,
                 photo=_photo(storage, service_photos[s.id]) if s.id in service_photos else None,
             )
             for s in services
@@ -74,6 +86,8 @@ async def business_page(
             version=engine_policy.version, summary=policy_summary(engine_policy),
             free_cancel_hours=engine_policy.free_cancel_hours, grace_minutes=engine_policy.grace_minutes,
         ),
+        deposit_notice=PublicDepositNotice(timing=business.deposit_notice_timing, banner=banner,
+                                           owner_note=business.deposit_notice_note),
     )
 
 
@@ -85,15 +99,28 @@ async def available_times(
     business: Business = Depends(get_live_business),
     session: AsyncSession = Depends(get_session),
 ):
-    """Start times where the whole visit fits, with who is free at each time.
+    """Start times where the whole visit fits, who is free, the real total, and the deposit notice.
 
-    Send the services the client picked (e.g. haircut + wash). Price, tax, deposit and length are worked out here,
-    so the client sees the real total before booking.
+    Send the services the client picked (e.g. haircut + wash). Price, tax, deposit and length are worked out here.
     """
     plan, staff, options = await availability.available_times(
         session, business, data.service_ids, data.staff_id, get_clock().now())
     taxes, tax_profile = await tax_profiles.visit_tax(session, business.id, [line.price for line in plan.lines])
     charges_tax = bool(tax_profile and tax_profile.tax_registered)
+
+    # The exact notice for these services: the policy the client would agree to, and the real amounts.
+    stored = await policies.get_policy(session, business, business.current_policy_version)
+    overrides = list(await session.scalars(select(Service.policy_override).where(Service.id.in_(data.service_ids))))
+    rules = strictest_policy(stored.rules, overrides)
+    policy = Policy.from_dict({**rules, "version": stored.version})
+    option = "deposit_held" if "deposit_held" in plan.payment_options else plan.payment_options[0]
+    hold = plan.deposit if option == "deposit_held" else taxes.gross_total
+    notice = build_notice(
+        hold=hold, total=taxes.gross_total, currency=business.currency, payment_option=option,
+        free_cancel_hours=policy.free_cancel_hours, late_cancel_fee=policy.late_cancel_fee,
+        no_show_fee=policy.no_show_fee, owner_note=business.deposit_notice_note,
+    )
+
     names = {s.id: s.name for s in staff}
     return AvailabilityOut(
         duration_minutes=plan.duration_minutes,
@@ -105,6 +132,8 @@ async def available_times(
         total_price=taxes.gross_total,
         currency=business.currency,
         payment_options=list(plan.payment_options),
+        deposit_notice=DepositNoticeOut(**notice),
+        show_notice_before_times=business.deposit_notice_timing == "booking_start",
         staff_choices=[StaffChoice(id=s.id, name=s.name) for s in staff],
         times=[TimeChoice(starts_at=o.starts_at, ends_at=o.ends_at,
                           staff=[StaffChoice(id=i, name=names[i]) for i in o.staff_ids]) for o in options],
