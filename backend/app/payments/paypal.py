@@ -16,6 +16,7 @@ import uuid
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -160,6 +161,22 @@ class PayPalClient:
 
     async def get_authorization(self, authorization_id: str) -> dict:
         return await self._request("GET", f"/v2/payments/authorizations/{authorization_id}")
+    async def verify_webhook_signature(self, *, headers: dict[str, str], event: dict, webhook_id: str) -> bool:
+        """Ask PayPal whether a webhook really came from PayPal (checks its signature)."""
+        names = ("paypal-auth-algo", "paypal-cert-url", "paypal-transmission-id",
+                 "paypal-transmission-sig", "paypal-transmission-time")
+        if not all(headers.get(name) for name in names):
+            return False
+        result = await self._request("POST", "/v1/notifications/verify-webhook-signature", json={
+            "auth_algo": headers["paypal-auth-algo"],
+            "cert_url": headers["paypal-cert-url"],
+            "transmission_id": headers["paypal-transmission-id"],
+            "transmission_sig": headers["paypal-transmission-sig"],
+            "transmission_time": headers["paypal-transmission-time"],
+            "webhook_id": webhook_id,
+            "webhook_event": event,
+        })
+        return result.get("verification_status") == "SUCCESS"
 
     async def capture_authorization(
         self,
@@ -191,6 +208,45 @@ class PayPalClient:
         return await self._request(
             "POST", f"/v2/payments/authorizations/{authorization_id}/void", request_id=request_id
         )
+        # ---------- Connecting businesses' own PayPal accounts ----------
+
+    async def create_partner_referral(self, *, tracking_id: str, return_url: str) -> str:
+        """Create a PayPal sign-up link for one business. Returns the URL the owner opens."""
+        result = await self._request("POST", "/v2/customer/partner-referrals", json={
+            "tracking_id": tracking_id,
+            "operations": [{
+                "operation": "API_INTEGRATION",
+                "api_integration_preference": {"rest_api_integration": {
+                    "integration_method": "PAYPAL",
+                    "integration_type": "THIRD_PARTY",
+                    "third_party_details": {"features": ["PAYMENT", "REFUND"]},
+                }},
+            }],
+            "products": ["EXPRESS_CHECKOUT"],
+            "legal_consents": [{"type": "SHARE_DATA_CONSENT", "granted": True}],
+            "partner_config_override": {"return_url": return_url},
+        })
+        link = next((l.get("href") for l in result.get("links", []) if l.get("rel") == "action_url"), None)
+        if not link:
+            raise PayPalError(502, "NO_ACTION_URL", "PayPal didn't return a sign-up link", None)
+        return link
+
+    async def find_merchant_id(self, partner_merchant_id: str, tracking_id: str) -> str | None:
+        """Which PayPal account signed up with this tracking ID (None if not finished yet)."""
+        try:
+            result = await self._request(
+                "GET", f"/v1/customer/partners/{partner_merchant_id}/merchant-integrations"
+                       f"?tracking_id={quote(tracking_id)}")
+        except PayPalError as err:
+            if err.status == 404:
+                return None
+            raise
+        return result.get("merchant_id")
+
+    async def merchant_integration(self, partner_merchant_id: str, merchant_id: str) -> dict:
+        """A connected account's status: can it receive payments, is its email confirmed, permissions given."""
+        return await self._request(
+            "GET", f"/v1/customer/partners/{partner_merchant_id}/merchant-integrations/{quote(merchant_id)}")
 
 
 def extract_authorization(order: dict) -> AuthorizationInfo:

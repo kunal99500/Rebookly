@@ -37,7 +37,8 @@ async def unique_slug(session: AsyncSession, name: str) -> str:
     return candidate
 
 
-async def create_business(session: AsyncSession, owner_id: uuid.UUID, data: BusinessCreate) -> Business:
+async def create_business(session: AsyncSession, owner_id: uuid.UUID, data: BusinessCreate,
+                          contact_email: str | None = None) -> Business:
     for _ in range(3):  # retry if two owners grab the same slug at the same moment
         business = Business(
             id=uuid.uuid4(),  # set now so the audit entry can reference it

@@ -1,0 +1,1 @@
+"""Notifications: an outbox of messages saved with the change that caused them, sent by a background job."""

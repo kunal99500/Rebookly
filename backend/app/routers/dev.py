@@ -204,3 +204,18 @@ async def ai_ping(request: Request, business_name: str = Query("Lumen Fitness", 
         )
     except (AIUnavailable, AIOutputError) as err:
         raise HTTPException(502, f"AI call failed: {err}")
+
+
+
+@router.post("/paypal/webhook")
+async def simulate_paypal_webhook(event: dict, request: Request, session: AsyncSession = Depends(get_session)):
+    """Development only: handle a PayPal event as if PayPal sent it (no signature check)."""
+    from app.payments import webhooks
+
+    paypal = request.app.state.paypal
+    if paypal is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "PayPal isn't configured")
+    row = await webhooks.record(session, event)
+    if row is None:
+        return {"status": "duplicate"}
+    return {"status": await webhooks.process(session, paypal, row), "refs": row.refs}

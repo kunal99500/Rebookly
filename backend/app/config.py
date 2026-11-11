@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     paypal_env: Literal["sandbox", "live"] = "sandbox"
     paypal_webhook_id: str = ""
     default_currency: str = "USD"
+    paypal_partner_merchant_id: str = ""            # Rebookly's own PayPal merchant (account) ID
+    paypal_require_connected_account: bool = False  # true in production: only connected businesses take bookings
 
     # ===== Supabase (Phase 2) =====
     supabase_url: str = ""
@@ -62,7 +64,13 @@ class Settings(BaseSettings):
     geocoder_api_key: SecretStr = SecretStr("")      # needed for paid providers such as LocationIQ
     geocoder_user_agent: str = "Rebookly/0.1 (contact: change-me@example.com)"
     geocoder_min_interval_seconds: float = 1.0      # Nominatim's public server: about 1 request per second
+        # ===== Notifications (email) =====
+    email_provider: Literal["console", "resend"] = "console"   # console = write emails to the log
+    resend_api_key: SecretStr = SecretStr("")
+    email_from: str = "Rebookly <onboarding@resend.dev>"
 
+
+   
     # ===== Development only =====
     enable_dev_routes: bool = False
     simulated_clock: bool = False

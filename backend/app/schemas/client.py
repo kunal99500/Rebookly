@@ -18,7 +18,20 @@ class ProfileIn(BaseModel):
 class ProfileOut(BaseModel):
     name: str
     phone_masked: str | None
+    email: str | None = None            # verified email, used for confirmations and reminders
+    email_pending: str | None = None    # waiting for its code
 
+
+class EmailIn(BaseModel):
+       model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+       email: str = Field(min_length=3, max_length=254)
+
+
+class EmailCodeIn(BaseModel):
+       model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+       code: str = Field(pattern=r"^\d{6}$")
 
 class BookingCreate(BaseModel):
     """A visit: one or more services, at a start time taken from the availability endpoint."""
@@ -36,6 +49,15 @@ class BookingCreate(BaseModel):
         if value.tzinfo is None:
             raise ValueError("starts_at must include a time zone; use a time from the availability endpoint")
         return value
+
+
+class ClassBookingCreate(BaseModel):
+    """A seat in a group class session (yoga, fitness...), chosen from the class's session list."""
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    slot_id: uuid.UUID
+    payment_option: Literal["deposit_held", "full_held"]
+    attendee_name: str | None = Field(default=None, max_length=80)
 
 
 class BookingStarted(BaseModel):

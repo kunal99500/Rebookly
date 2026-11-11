@@ -8,18 +8,23 @@ The AI never takes part in any of this.
 import uuid
 from datetime import datetime
 from decimal import Decimal
+import logging
 
 from fastapi import HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import get_clock
+from app.documents.issue import issue_for_decision, issue_safely
 from app.models import Booking, Decision, Payment, Slot
+from app.notifications import booking_messages
+from app.notifications.outbox import notify_safely
 from app.payments.paypal import PayPalClient, PayPalError
 from app.rules.engine import Action, BookingFacts, Decision as EngineDecision, Event, Policy, decide
 from app.rules.outcomes import initial_status, payment_status_after_capture, settle_from_paypal
-from app.services import audit
-from app.documents.issue import issue_for_decision, issue_safely
+from app.services import audit, waitlist
+
+logger = logging.getLogger("rebookly.outcomes")
 
 CANCEL_EVENTS = (Event.CLIENT_CANCELLED, Event.OWNER_CANCELLED)
 NEW_BOOKING_STATUS = {
@@ -81,8 +86,9 @@ async def apply_event(
     if event in CANCEL_EVENTS:
         booking.cancelled_at = now
         booking.cancelled_by = "client" if event == Event.CLIENT_CANCELLED else "owner"
-        await session.execute(update(Slot).where(Slot.id == booking.slot_id, Slot.booked_count > 0)
-                              .values(booked_count=Slot.booked_count - 1))  # the time can be booked again
+        if booking.slot_id is not None:  # class bookings give their seat back
+            await session.execute(update(Slot).where(Slot.id == booking.slot_id, Slot.booked_count > 0)
+                                  .values(booked_count=Slot.booked_count - 1))
     elif event == Event.ATTENDED:
         booking.checked_in_at = now
     elif event == Event.NO_SHOW:
@@ -101,11 +107,20 @@ async def apply_event(
     audit.record(session, actor_type=actor_type, actor_id=actor_id, action=f"booking.{event.value}",
                  business_id=booking.business_id, booking_id=booking.id,
                  details={"decision_id": str(decision_id), "action": row.action, "amount": str(row.amount)})
+    await session.flush()
+    # Cancellation emails to both sides, and "fee waiting for approval" to the owner.
+    await notify_safely(session, booking_messages.booking_outcome(session, booking, row))
     await session.commit()
 
     if row.status == "approved":
-        row = await execute(session, paypal, row.id)
+           row = await execute(session, paypal, row.id)
     await session.refresh(booking)
+    if event in CANCEL_EVENTS:
+           # Recover the booking first: offer the freed time to people on the waitlist.
+           try:
+               await waitlist.offer_freed_time(session, booking)
+           except Exception:
+               logger.exception("Couldn't offer a freed time to the waitlist")
     return booking, row
 
 
@@ -148,7 +163,8 @@ async def execute(session: AsyncSession, paypal: PayPalClient, decision_id: uuid
     audit.record(session, actor_type="system", action=money_action, business_id=booking.business_id,
                  booking_id=booking.id, details={"decision_id": str(decision.id), "amount": str(amount),
                                                  "paypal_debug_id": decision.last_paypal_debug_id})
-    await issue_safely(session, issue_for_decision(session, decision))  # receipt or release notice
+    await issue_safely(session, issue_for_decision(session, decision))           # receipt or release notice
+    await notify_safely(session, booking_messages.money_settled(session, decision))  # email about the money
     await session.commit()
     await session.refresh(decision)
     return decision
@@ -198,6 +214,7 @@ async def waive(
                  business_id=booking.business_id, booking_id=booking.id, details={"decision_id": str(decision.id)})
     await session.commit()
     return await execute(session, paypal, decision.id)
+
 
 async def recover(session: AsyncSession, paypal: PayPalClient, decision_id: uuid.UUID) -> Decision:
     """Finish a decision that got stuck ("executing") or failed, without ever charging twice.
@@ -250,6 +267,8 @@ async def recover(session: AsyncSession, paypal: PayPalClient, decision_id: uuid
 
     audit.record(session, actor_type="system", action=action, business_id=booking.business_id, booking_id=booking.id,
                  details={"decision_id": str(decision.id), "paypal_status": paypal_status})
+    await issue_safely(session, issue_for_decision(session, decision))
+    await notify_safely(session, booking_messages.money_settled(session, decision))
     await session.commit()
     await session.refresh(decision)
     return decision

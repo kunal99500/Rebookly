@@ -19,18 +19,22 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import get_clock
+from app.compliance import profiles as tax_profiles
 from app.documents.issue import issue_confirmation, issue_safely
 from app.models import (
-    Booking, BookingItem, Business, BusinessPolicy, Client, Payment, Service, Slot, Staff,
+    Booking, BookingItem, Business, BusinessPolicy, Client, Location, Payment, Service, Slot, Staff,
 )
+from app.notifications import booking_messages
+from app.notifications.outbox import notify_safely
 from app.payments.paypal import PayPalClient, PayPalError
 from app.rules.booking import (
     MAX_ACTIVE_BOOKINGS_PER_BUSINESS, PAYMENT_WINDOW_MINUTES, new_check_in_token, new_confirmation_number,
 )
-from app.rules.pricing import VisitError, strictest_policy
-from app.schemas.client import BookingCreate
+from app.rules.catalog import BOOKING_WINDOW_HOURS
+from app.rules.pricing import ServiceLine, VisitError, plan_visit, strictest_policy
+from app.schemas.client import BookingCreate, ClassBookingCreate
 from app.services import audit, availability
-from app.compliance import profiles as tax_profiles
+from app.config import get_settings
 
 HONOR_PERIOD = timedelta(days=3)
 ACTIVE = ("pending_payment", "confirmed")
@@ -52,6 +56,8 @@ async def create_booking(session: AsyncSession, client: Client, data: BookingCre
     await session.execute(select(Business.id).where(Business.id == business.id).with_for_update())
     if business.status != "live" or business.current_policy_version is None:
         raise _conflict("This business isn't taking bookings right now")
+    if get_settings().paypal_require_connected_account and business.paypal_status != "connected":
+        raise _conflict("This business can't take online payments right now")
 
     # Re-check availability now, with the same rules the client saw (services, staff, hours, notice).
     plan, staff, options = await availability.available_times(
@@ -61,11 +67,11 @@ async def create_booking(session: AsyncSession, client: Client, data: BookingCre
         raise _conflict("Sorry, that time is no longer available. Please pick another.")
     chosen = next(s for s in staff if s.id == match.staff_ids[0])  # first free person, in the owner's order
     try:
-           plan.hold_for(data.payment_option)  # checks this payment option is allowed for these services
+        plan.hold_for(data.payment_option)  # checks this payment option is allowed for these services
     except VisitError as err:
-           raise _conflict(str(err))
+        raise _conflict(str(err))
 
-       # Tax from the business's tax profile (none if not registered). The client pays the gross total.
+    # Tax from the business's tax profile (none if not registered). The client pays the gross total.
     taxes, tax_profile = await tax_profiles.visit_tax(session, business.id, [line.price for line in plan.lines])
     total = taxes.gross_total
     held = plan.deposit if data.payment_option == "deposit_held" else total
@@ -108,7 +114,7 @@ async def create_booking(session: AsyncSession, client: Client, data: BookingCre
             name=line.name, duration_minutes=line.duration_minutes, price=line.price, deposit=line.deposit,
             tax_rate=tax_rate, tax_amount=tax.tax,
             price_includes_tax=tax_profile.prices_include_tax if tax_rate is not None else None,
-           ))
+        ))
     audit.record(session, actor_type="client", actor_id=client.auth_user_id, action="booking.started",
                  business_id=business.id, booking_id=booking.id,
                  details={"staff_id": str(chosen.id), "services": len(plan.lines), "held_amount": str(held)})
@@ -118,6 +124,86 @@ async def create_booking(session: AsyncSession, client: Client, data: BookingCre
         # The database's overlap protection caught a booking made at the very same moment.
         await session.rollback()
         raise _conflict("Sorry, that time was just taken. Please pick another.")
+    await session.refresh(booking)
+    return booking
+
+
+async def create_class_booking(session: AsyncSession, client: Client, data: ClassBookingCreate) -> Booking:
+    """Step 1 for a group class: take one seat in a session and save a pending booking. No PayPal yet.
+
+    Seats are counted on the session itself: an atomic update only succeeds while a seat is free,
+    so two clients can never take the last seat at the same time.
+    """
+    now = get_clock().now()
+    slot = await session.get(Slot, data.slot_id)
+    if slot is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That class session doesn't exist")
+    business = await session.get(Business, slot.business_id)
+    service = await session.get(Service, slot.service_id)
+
+    await session.execute(select(Business.id).where(Business.id == business.id).with_for_update())
+    if business.status != "live" or business.current_policy_version is None:
+        raise _conflict("This business isn't taking bookings right now")
+    if get_settings().paypal_require_connected_account and business.paypal_status != "connected":
+        raise _conflict("This business can't take online payments right now")
+    if service is None or not service.is_active or service.booking_mode != "class":
+        raise _conflict("That class isn't available")
+    if not (now < slot.starts_at <= now + timedelta(hours=BOOKING_WINDOW_HOURS)):
+        raise _conflict("That session can't be booked right now")
+
+    already = await session.scalar(select(func.count()).select_from(Booking).where(
+        Booking.client_id == client.id, Booking.slot_id == slot.id, Booking.status.in_(ACTIVE)))
+    if already:
+        raise _conflict("You already have a seat in this session")
+    active = await session.scalar(select(func.count()).select_from(Booking).where(
+        Booking.client_id == client.id, Booking.business_id == business.id,
+        Booking.status.in_(ACTIVE), Booking.starts_at > now))
+    if active >= MAX_ACTIVE_BOOKINGS_PER_BUSINESS:
+        raise _conflict(f"You can have up to {MAX_ACTIVE_BOOKINGS_PER_BUSINESS} upcoming bookings here")
+
+    plan = plan_visit([ServiceLine(service.id, service.name, "main", service.duration_minutes, 0,
+                                   service.price, service.deposit, tuple(service.payment_options))])
+    try:
+        plan.hold_for(data.payment_option)
+    except VisitError as err:
+        raise _conflict(str(err))
+    taxes, tax_profile = await tax_profiles.visit_tax(session, business.id, [service.price])
+    total = taxes.gross_total
+    held = plan.deposit if data.payment_option == "deposit_held" else total
+    tax_rate = tax_profile.tax_rate if tax_profile and tax_profile.tax_registered else None
+
+    # Take the seat: succeeds only if one is still free and the session isn't blocked.
+    taken = await session.scalar(
+        update(Slot).where(Slot.id == slot.id, Slot.is_blocked.is_(False), Slot.booked_count < Slot.capacity)
+        .values(booked_count=Slot.booked_count + 1).returning(Slot.id))
+    if taken is None:
+        await session.rollback()
+        raise _conflict("Sorry, this session is full. Please pick another.")
+
+    policy = await session.scalar(select(BusinessPolicy).where(
+        BusinessPolicy.business_id == business.id, BusinessPolicy.version == business.current_policy_version))
+    location_id = await session.scalar(select(Location.id).where(
+        Location.business_id == business.id, Location.is_primary.is_(True)))
+    booking = Booking(
+        id=uuid.uuid4(), business_id=business.id, service_id=service.id, slot_id=slot.id,
+        location_id=location_id, staff_id=None, client_id=client.id, attendee_name=data.attendee_name,
+        status="pending_payment", payment_option=data.payment_option, price=total, held_amount=held,
+        currency=business.currency, policy_version=policy.version,
+        policy_snapshot=strictest_policy(policy.rules, [service.policy_override]),
+        starts_at=slot.starts_at, ends_at=slot.ends_at, occupied_until=slot.ends_at,
+        payment_expires_at=now + timedelta(minutes=PAYMENT_WINDOW_MINUTES), check_in_token=new_check_in_token(),
+    )
+    session.add(booking)
+    session.add(BookingItem(
+        booking_id=booking.id, service_id=service.id, position=1, kind="main", name=service.name,
+        duration_minutes=service.duration_minutes, price=service.price, deposit=service.deposit,
+        tax_rate=tax_rate, tax_amount=taxes.lines[0].tax,
+        price_includes_tax=tax_profile.prices_include_tax if tax_rate is not None else None,
+    ))
+    audit.record(session, actor_type="client", actor_id=client.auth_user_id, action="booking.started",
+                 business_id=business.id, booking_id=booking.id,
+                 details={"slot_id": str(slot.id), "class": True, "held_amount": str(held)})
+    await session.commit()
     await session.refresh(booking)
     return booking
 
@@ -220,7 +306,8 @@ async def authorize_hold(session: AsyncSession, paypal: PayPalClient, booking: B
                  business_id=booking.business_id, booking_id=booking.id,
                  details={"held_amount": str(payment.amount), "method": info.payment_method,
                           "paypal_authorization_id": info.authorization_id})
-    await issue_safely(session, issue_confirmation(session, booking))
+    await issue_safely(session, issue_confirmation(session, booking))                  # the confirmation receipt
+    await notify_safely(session, booking_messages.booking_confirmed(session, booking))  # emails to client and owner
     await session.commit()
     await session.refresh(booking)
     return booking

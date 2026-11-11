@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clock import get_clock
 from app.documents.issue import issue_confirmation, issue_safely
 from app.models import Booking, BookingItem, Business, Payment
+from app.notifications import booking_messages
+from app.notifications.outbox import notify_safely
 from app.rules.rescheduling import reschedule_problem
 from app.services import audit, availability
 
@@ -63,6 +65,8 @@ async def reschedule(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Booking not found")
     if booking.status != "confirmed":
         raise _conflict("Only confirmed bookings can be moved")
+    if booking.slot_id is not None:
+        raise _conflict("Class bookings can't be moved. Cancel this one and book another session.")
     payment = await _hold(session, booking)
     problem = reschedule_problem(
         now=now, current_start=booking.starts_at, new_start=new_start,
@@ -95,6 +99,7 @@ async def reschedule(
         await session.rollback()
         raise _conflict("Sorry, that time was just taken. Please pick another.")
     await issue_safely(session, issue_confirmation(session, booking, replace=True))  # new confirmation, new time
+    await notify_safely(session, booking_messages.booking_rescheduled(session, booking))  # email the client
     await session.commit()
     await session.refresh(booking)
     return booking

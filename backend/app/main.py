@@ -18,9 +18,9 @@ from app.config import get_settings
 from app.geo.geocoding import Geocoder
 from app.jobs.scheduler import JobRunner, start_scheduler
 from app.media.storage import SupabaseStorage
+from app.notifications.senders import ConsoleEmailSender, ResendEmailSender
 from app.payments.paypal import PayPalClient
 from app.security.phone import PhoneProtector
-
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(name)s  %(message)s")
 logger = logging.getLogger("rebookly")
@@ -113,21 +113,27 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("LLM_API_KEY or LLM_MODEL is missing: AI features are disabled.")
 
-    # ---------- Background jobs (release unpaid bookings, recover stuck payments) ----------
-    # Started last, because jobs use the database and PayPal set up above.
+    # ---------- Email (console in development, Resend for real sending) ----------
+    app.state.email = ConsoleEmailSender()
+    if settings.email_provider == "resend":
+        app.state.email = ResendEmailSender(settings.resend_api_key.get_secret_value(), settings.email_from)
+
+    # ---------- Background jobs ----------
+    # Started last, because jobs use the database, PayPal and email set up above.
     app.state.jobs, scheduler = None, None
     if settings.enable_jobs and db.is_db_ready():
-        app.state.jobs = JobRunner(app.state.paypal)
+        app.state.jobs = JobRunner(app.state.paypal, app.state.email)
         scheduler = start_scheduler(app.state.jobs)
     else:
         logger.warning("Background jobs are off.")
 
     logger.info(
         "Rebookly API started: env=%s, paypal=%s, database=%s, sign_in=%s, phone_protection=%s, "
-        "storage=%s, geocoder=%s, ai=%s, jobs=%s, simulated_clock=%s, dev_routes=%s",
+        "storage=%s, geocoder=%s, ai=%s, email=%s, jobs=%s, simulated_clock=%s, dev_routes=%s",
         settings.app_env, settings.paypal_env, db.is_db_ready(), app.state.auth is not None,
         app.state.phones is not None, app.state.storage is not None, app.state.geocoder is not None,
-        app.state.ai is not None, app.state.jobs is not None, settings.simulated_clock, settings.enable_dev_routes,
+        app.state.ai is not None, settings.email_provider, app.state.jobs is not None,
+        settings.simulated_clock, settings.enable_dev_routes,
     )
 
     yield
@@ -137,6 +143,7 @@ async def lifespan(app: FastAPI):
         scheduler.shutdown(wait=False)
     if app.state.ai is not None:
         await app.state.ai.close()          # also sends any queued Langfuse traces
+    await app.state.email.close()
     if app.state.geocoder is not None:
         await app.state.geocoder.close()
     if app.state.storage is not None:
@@ -202,16 +209,23 @@ def create_app() -> FastAPI:
     from app.routers.public import documents as public_documents
     from app.routers.public import geo as public_geo
     from app.routers.public import search as public_search
-    for module in (public_businesses, public_compliance, public_documents, public_geo,public_search):
+    for module in (public_businesses, public_compliance, public_documents, public_geo, public_search):
         app.include_router(module.router)
 
     # ---------- Checkout (signed links, no sign-in) ----------
     from app.routers import checkout
     app.include_router(checkout.router)
+        # ---------- Webhooks (PayPal; each event's signature is verified) ----------
+    from app.routers import webhooks as webhook_routes
+    app.include_router(webhook_routes.router)
 
     # ---------- Client API (signed-in clients) ----------
+        # ---------- Client API (signed-in clients) ----------
+    from app.routers.client import assistant as client_assistant
     from app.routers.client import bookings as client_bookings
-    app.include_router(client_bookings.router)
+    from app.routers.client import waitlist as client_waitlist
+    for module in (client_bookings, client_assistant, client_waitlist):
+        app.include_router(module.router)
 
     # ---------- Owner API (signed-in business owners) ----------
     from app.routers.owner import bookings as owner_bookings
@@ -220,16 +234,17 @@ def create_app() -> FastAPI:
     from app.routers.owner import dashboard as owner_dashboard
     from app.routers.owner import decisions as owner_decisions
     from app.routers.owner import location as owner_location
+    from app.routers.owner import onboarding as owner_onboarding
     from app.routers.owner import photos as owner_photos
     from app.routers.owner import policies as owner_policies
     from app.routers.owner import schedule as owner_schedule
     from app.routers.owner import services as owner_services
-    from app.routers.owner import onboarding as owner_onboarding
     from app.routers.owner import team as owner_team
+    from app.routers.owner import paypal as owner_paypal
     for module in (
         # Setting up the business
-        owner_businesses, owner_location, owner_compliance, owner_services, owner_policies,
-        owner_schedule, owner_team, owner_photos, owner_onboarding,
+        owner_onboarding, owner_businesses, owner_location, owner_compliance,owner_paypal, owner_services, owner_policies,
+        owner_schedule, owner_team, owner_photos,
         # Running it day to day
         owner_bookings, owner_decisions, owner_dashboard,
     ):

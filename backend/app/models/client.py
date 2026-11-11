@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, LargeBinary, String
+from sqlalchemy import DateTime, LargeBinary, String,Integer
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,3 +28,10 @@ class Client(UUIDPrimaryKey, Timestamps, Base):
 
     # Set when the client asks to delete their data; personal fields are then wiped.
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+        # Optional email for confirmations and reminders. Only used once verified with a code.
+    email: Mapped[str | None] = mapped_column(String(320))
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    email_pending: Mapped[str | None] = mapped_column(String(320))          # waiting for its code
+    email_code_hash: Mapped[str | None] = mapped_column(String(64))
+    email_code_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    email_code_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")

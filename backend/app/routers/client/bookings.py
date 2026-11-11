@@ -11,12 +11,14 @@ from app.config import get_settings
 from app.db import get_session
 from app.models import Booking, Business, Service,BookingItem
 from app.rules.engine import Action, Event
-from app.schemas.client import BookingCreate, BookingItemOut, BookingOut, BookingStarted, ProfileIn, ProfileOut
+from app.schemas.client import BookingCreate, BookingItemOut, BookingOut, BookingStarted, ClassBookingCreate, ProfileIn, ProfileOut
 from app.schemas.outcome import CancelPreviewOut, DecisionOut, OutcomeOut
 from app.security.links import checkout_signature
 from app.security.phone import mask_phone
 from app.services import bookings, clients, outcomes
 from datetime import date
+from app.schemas.client import EmailCodeIn, EmailIn
+from app.services import client_email
 
 from fastapi import Query
 from app.schemas.client import RescheduleIn, RescheduleOption
@@ -34,14 +36,19 @@ def _service(request: Request, name: str):
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f"{name} is not configured on the server")
     return value
 
+def _profile_out(request: Request, client) -> ProfileOut:
+       phone = _service(request, "phones").reveal(client.phone_encrypted) if client.phone_encrypted else None
+       verified = client.email if client.email_verified_at else None
+       return ProfileOut(name=client.name, phone_masked=mask_phone(phone) if phone else None,
+                         email=verified, email_pending=client.email_pending)
+
 
 @router.get("/profile", response_model=ProfileOut)
 async def get_profile(
     request: Request, user: AuthUser = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ):
     client = await clients.require_client(session, user)
-    phone = _service(request, "phones").reveal(client.phone_encrypted) if client.phone_encrypted else None
-    return ProfileOut(name=client.name, phone_masked=mask_phone(phone) if phone else None)
+    return _profile_out(request, client)
 
 
 @router.put("/profile", response_model=ProfileOut)
@@ -54,7 +61,18 @@ async def save_profile(
     """Save the client's name. The phone number comes from their verified sign-in."""
     phones = _service(request, "phones")
     client = await clients.save_profile(session, user, data, phones, allow_dev_phone=get_settings().enable_dev_routes)
-    return ProfileOut(name=client.name, phone_masked=mask_phone(phones.reveal(client.phone_encrypted)))
+    return _profile_out(request, client)
+
+async def _start_checkout(request: Request, session: AsyncSession, booking: Booking) -> BookingStarted:
+    """Create the PayPal order for a new booking and return the signed checkout link."""
+    await bookings.hold_payment(session, _service(request, "paypal"), booking)
+    settings = get_settings()
+    signature = checkout_signature(settings.phone_hash_key.get_secret_value(), booking.id)
+    return BookingStarted(
+        booking_id=booking.id, status=booking.status, held_amount=booking.held_amount,
+        currency=booking.currency, payment_expires_at=booking.payment_expires_at,
+        checkout_url=f"{settings.backend_url}/checkout/{booking.id}?sig={signature}",
+    )
 
 
 @router.post("/bookings", response_model=BookingStarted, status_code=status.HTTP_201_CREATED)
@@ -64,18 +82,25 @@ async def start_booking(
     user: AuthUser = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Reserve the slot for 15 minutes and create the PayPal order. Open checkout_url to pay."""
-    paypal = _service(request, "paypal")
+    """Book an appointment (one or more services). The time is held for 15 minutes while you pay."""
+    _service(request, "paypal")  # fail early if payments aren't available
     client = await clients.require_client(session, user)
     booking = await bookings.create_booking(session, client, data)
-    await bookings.hold_payment(session, paypal, booking)
-    settings = get_settings()
-    signature = checkout_signature(settings.phone_hash_key.get_secret_value(), booking.id)
-    return BookingStarted(
-        booking_id=booking.id, status=booking.status, held_amount=booking.held_amount,
-        currency=booking.currency, payment_expires_at=booking.payment_expires_at,
-        checkout_url=f"{settings.backend_url}/checkout/{booking.id}?sig={signature}",
-    )
+    return await _start_checkout(request, session, booking)
+
+
+@router.post("/bookings/class", response_model=BookingStarted, status_code=status.HTTP_201_CREATED)
+async def start_class_booking(
+    data: ClassBookingCreate,
+    request: Request,
+    user: AuthUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Book a seat in a group class session. The seat is held for 15 minutes while you pay."""
+    _service(request, "paypal")
+    client = await clients.require_client(session, user)
+    booking = await bookings.create_class_booking(session, client, data)
+    return await _start_checkout(request, session, booking)
 
 
 async def _booking_out(session: AsyncSession, booking: Booking) -> BookingOut:
@@ -185,3 +210,30 @@ async def reschedule(
        booking = await _my_booking(session, user, booking_id)
        moved = await rescheduling.reschedule(session, booking.id, data.starts_at, data.staff_id, "client", user.id)
        return await _booking_out(session, moved)
+
+
+@router.post("/profile/email", status_code=status.HTTP_202_ACCEPTED)
+async def add_email(data: EmailIn, user: AuthUser = Depends(get_current_user),
+                       session: AsyncSession = Depends(get_session)):
+       """Add an email for confirmations and reminders. We send a 6-digit code to prove it's yours."""
+       client = await clients.require_client(session, user)
+       try:
+           email = client_email.normalize_email(data.email)
+       except ValueError as err:
+           raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(err))
+       await client_email.start(session, client, email, get_settings().phone_hash_key.get_secret_value())
+       return {"message": f"We've sent a 6-digit code to {email}. It expires in 15 minutes."}
+
+
+@router.post("/profile/email/verify", response_model=ProfileOut)
+async def verify_email(data: EmailCodeIn, request: Request, user: AuthUser = Depends(get_current_user),
+                          session: AsyncSession = Depends(get_session)):
+       client = await clients.require_client(session, user)
+       client = await client_email.verify(session, client, data.code, get_settings().phone_hash_key.get_secret_value())
+       return _profile_out(request, client)
+
+
+@router.delete("/profile/email", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_email(user: AuthUser = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+       """Stop emails: removes your email address."""
+       await client_email.remove(session, await clients.require_client(session, user))

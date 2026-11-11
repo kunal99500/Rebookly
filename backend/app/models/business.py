@@ -1,8 +1,9 @@
 """A business using Rebookly: salon, trainer, tutor, and so on."""
+import datetime
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import Boolean, CheckConstraint, Integer, Numeric, String,Text, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, Integer, Numeric, String,Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -60,6 +61,10 @@ class Business(UUIDPrimaryKey, Timestamps, Base):
 
     status: Mapped[str] = mapped_column(String(20), default="draft", server_default="draft")
     paypal_status: Mapped[str] = mapped_column(String(20), default="not_connected", server_default="not_connected")
+        # Connecting the business's own PayPal account (PayPal's partner sign-up)
+    paypal_tracking_id: Mapped[str | None] = mapped_column(String(127), unique=True)
+    paypal_connected_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True))
+    paypal_checked_at: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True))
     paypal_merchant_id: Mapped[str | None] = mapped_column(String(64))
 
     # Which saved policy version applies to new bookings.
@@ -72,6 +77,8 @@ class Business(UUIDPrimaryKey, Timestamps, Base):
            # When clients see the deposit notice (it always appears at checkout too), and an optional note.
     deposit_notice_timing: Mapped[str] = mapped_column(String(16), default="booking_start", server_default="booking_start")
     deposit_notice_note: Mapped[str | None] = mapped_column(String(300))
+     # Where owner alerts are emailed (new bookings, fees waiting for approval). Defaults to the sign-in email.
+    notification_email: Mapped[str | None] = mapped_column(String(320))
     rating_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     services: Mapped[list["Service"]] = relationship(
         back_populates="business", cascade="all, delete-orphan", order_by="Service.sort_order"
