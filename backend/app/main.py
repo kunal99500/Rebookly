@@ -260,13 +260,12 @@ def create_app() -> FastAPI:
     from app.routers.owner import reviews as owner_reviews
     from app.routers.owner import rescheduling as owner_rescheduling
     from app.routers.owner import briefing as owner_briefing
-    
     for module in (
         # Setting up the business
-        owner_onboarding, owner_businesses, owner_location, owner_compliance,owner_paypal, owner_services, owner_policies,
-        owner_schedule, owner_team, owner_photos,
+        owner_onboarding, owner_businesses, owner_location, owner_compliance, owner_paypal, owner_services,
+        owner_policies, owner_schedule, owner_team, owner_photos,
         # Running it day to day
-        owner_bookings, owner_decisions, owner_dashboard, owner_rescheduling, owner_briefing
+        owner_bookings, owner_decisions, owner_dashboard, owner_rescheduling, owner_briefing, owner_reviews,
     ):
         app.include_router(module.router)
 
