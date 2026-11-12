@@ -4,24 +4,31 @@ Every outcome goes through the rules engine, which produces a decision about the
   * allowed outright (free cancellation, attended)  -> executed straight away (void or capture)
   * a fee                                           -> waits for the owner to approve, lower, or waive
 The AI never takes part in any of this.
+
+Rebookly's own fee (3% on the free plan) is worked out by rules/platform_fee.py, only when a client pays
+for a visit; never on cancellations, no-shows or released holds.
 """
+import logging
 import uuid
 from datetime import datetime
 from decimal import Decimal
-import logging
 
 from fastapi import HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clock import get_clock
+from app.config import get_settings
 from app.documents.issue import issue_for_decision, issue_safely
-from app.models import Booking, Decision, Payment, Slot
+from app.models import Booking, Business, Decision, Payment, Slot
 from app.notifications import booking_messages
 from app.notifications.outbox import notify_safely
 from app.payments.paypal import PayPalClient, PayPalError
 from app.rules.engine import Action, BookingFacts, Decision as EngineDecision, Event, Policy, decide
 from app.rules.outcomes import initial_status, payment_status_after_capture, settle_from_paypal
+from app.rules.plans import pro_active
+from app.rules.platform_fee import platform_fee as rebookly_fee
+from app.rules.rescheduling import MOVED_BY_OWNER_REASON, engine_event_for_cancellation
 from app.services import audit, waitlist
 
 logger = logging.getLogger("rebookly.outcomes")
@@ -53,7 +60,7 @@ def _facts(booking: Booking, held: Decimal, event: Event, now: datetime) -> Book
         held_amount=held,
         event=event,
         event_time=now if event in CANCEL_EVENTS else None,
-        slot_refilled=False,  # waitlist refills are added in a later step
+        slot_refilled=False,  # refills are handled later by services/refills.py
     )
 
 
@@ -61,7 +68,8 @@ async def preview(session: AsyncSession, booking: Booking, event: Event) -> tupl
     """What the engine would decide right now, without changing anything."""
     payment = await _active_hold(session, booking)
     now = get_clock().now()
-    return decide(_facts(booking, payment.amount, event, now), _policy(booking), now), payment
+    engine_event = engine_event_for_cancellation(event, booking.moved_by_owner_at is not None)
+    return decide(_facts(booking, payment.amount, engine_event, now), _policy(booking), now), payment
 
 
 async def apply_event(
@@ -78,7 +86,9 @@ async def apply_event(
         raise HTTPException(status.HTTP_409_CONFLICT, f"This booking is already {booking.status.replace('_', ' ')}")
 
     payment = await _active_hold(session, booking)
-    result = decide(_facts(booking, payment.amount, event, now), _policy(booking), now)
+    engine_event = engine_event_for_cancellation(event, booking.moved_by_owner_at is not None)
+    result = decide(_facts(booking, payment.amount, engine_event, now), _policy(booking), now)
+    reason = MOVED_BY_OWNER_REASON if engine_event != event else result.reason
     if result.action == Action.WAIT:
         raise HTTPException(status.HTTP_409_CONFLICT, result.reason)
 
@@ -98,7 +108,7 @@ async def apply_event(
     row = Decision(
         id=decision_id, booking_id=booking.id, payment_id=payment.id,
         event=event.value, action=result.action.value, amount=result.amount, rule=result.rule,
-        reason=result.reason, fee_capped=result.fee_capped, needs_owner_approval=result.needs_owner_approval,
+        reason=reason, fee_capped=result.fee_capped, needs_owner_approval=result.needs_owner_approval,
         suggested_action=result.suggested_action.value if result.suggested_action else None,
         status=initial_status(result),
         paypal_request_id=f"decision-{decision_id}",  # idempotency key: PayPal never runs it twice
@@ -113,15 +123,24 @@ async def apply_event(
     await session.commit()
 
     if row.status == "approved":
-           row = await execute(session, paypal, row.id)
+        row = await execute(session, paypal, row.id)
     await session.refresh(booking)
     if event in CANCEL_EVENTS:
-           # Recover the booking first: offer the freed time to people on the waitlist.
-           try:
-               await waitlist.offer_freed_time(session, booking)
-           except Exception:
-               logger.exception("Couldn't offer a freed time to the waitlist")
+        # Recover the booking first: offer the freed time to people on the waitlist.
+        try:
+            await waitlist.offer_freed_time(session, booking)
+        except Exception:
+            logger.exception("Couldn't offer a freed time to the waitlist")
     return booking, row
+
+
+async def _rebookly_fee(session: AsyncSession, decision: Decision, booking: Booking, amount: Decimal) -> Decimal:
+    """Rebookly's fee on this money movement: 3% of a visit payment on the free plan, otherwise nothing."""
+    business = await session.get(Business, booking.business_id)
+    return rebookly_fee(
+        amount=amount, event=decision.event, action=decision.action, plan=business.plan,
+        pro_active=pro_active(business.plan, business.pro_until, get_clock().now()),
+    )
 
 
 async def execute(session: AsyncSession, paypal: PayPalClient, decision_id: uuid.UUID) -> Decision:
@@ -130,6 +149,7 @@ async def execute(session: AsyncSession, paypal: PayPalClient, decision_id: uuid
     if decision is None or decision.status != "approved":
         return decision
     payment = await session.get(Payment, decision.payment_id)
+    booking = await session.get(Booking, decision.booking_id)
     decision.status = "executing"  # visible if the server stops half-way, so it can be retried safely
     await session.commit()
 
@@ -138,9 +158,13 @@ async def execute(session: AsyncSession, paypal: PayPalClient, decision_id: uuid
     now = get_clock().now()
     try:
         if decision.action == "capture" and amount > 0:
+            fee = await _rebookly_fee(session, decision, booking, amount)
+            decision.platform_fee = fee
             result = await paypal.capture_authorization(
                 payment.paypal_authorization_id, amount=amount, currency=payment.currency,
                 final_capture=True, request_id=decision.paypal_request_id,
+                # Only sent to PayPal once PayPal has approved platform fees for Rebookly's partner account.
+                platform_fee=fee if get_settings().platform_fees_enabled else None,
             )
             payment.amount_captured = payment.amount_captured + amount
             payment.status = payment_status_after_capture(payment.amount, payment.amount_captured)
@@ -149,19 +173,21 @@ async def execute(session: AsyncSession, paypal: PayPalClient, decision_id: uuid
         else:
             await paypal.void_authorization(payment.paypal_authorization_id, request_id=decision.paypal_request_id)
             payment.status = "voided"
+            decision.platform_fee = Decimal("0.00")   # nothing moved, so nothing for Rebookly
             money_action = "payment.voided"
         decision.status = "waived" if waived else "executed"
         decision.final_amount = amount if decision.action == "capture" else Decimal("0")
         decision.executed_at = now
     except PayPalError as err:
         decision.status = "failed"
+        decision.platform_fee = None
         decision.failure_reason = err.message[:500]
         decision.last_paypal_debug_id = payment.last_paypal_debug_id = err.debug_id
         money_action = "payment.failed"
 
-    booking = await session.get(Booking, decision.booking_id)
     audit.record(session, actor_type="system", action=money_action, business_id=booking.business_id,
                  booking_id=booking.id, details={"decision_id": str(decision.id), "amount": str(amount),
+                                                 "rebookly_fee": str(decision.platform_fee or 0),
                                                  "paypal_debug_id": decision.last_paypal_debug_id})
     await issue_safely(session, issue_for_decision(session, decision))           # receipt or release notice
     await notify_safely(session, booking_messages.money_settled(session, decision))  # email about the money
@@ -206,7 +232,6 @@ async def waive(
 ) -> Decision:
     decision = await _pending(session, decision_id)
     decision.final_amount = Decimal("0")
-    decision.action = "capture" if decision.action == "capture" else "void"
     decision.approved_by_user_id, decision.approved_at = owner_id, get_clock().now()
     decision.owner_note, decision.status = note, "approved"
     booking = await session.get(Booking, decision.booking_id)
@@ -254,8 +279,10 @@ async def recover(session: AsyncSession, paypal: PayPalClient, decision_id: uuid
             payment.status = payment_status_after_capture(payment.amount, payment.amount_captured)
             payment.captures = [*payment.captures,
                                 {"id": None, "amount": str(amount), "at": now.isoformat(), "reconciled": True}]
+            decision.platform_fee = await _rebookly_fee(session, decision, booking, amount)
         else:
             payment.status = "voided"
+            decision.platform_fee = Decimal("0.00")
         decision.status = "waived" if decision.needs_owner_approval and amount == 0 else "executed"
         decision.final_amount = amount if intended == "capture" else Decimal("0")
         decision.executed_at, decision.failure_reason = now, None

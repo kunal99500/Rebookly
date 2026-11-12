@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Flutter replaces $FLUTTER_BASE_HREF at build time; keep it for hosting under a sub-path. -->
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Rebookly: book local appointments with a small held deposit</title>
+  <meta name="description" content="Find barbers, salons, tutors and trainers near you. A small deposit holds your booking and goes toward your bill.">
+  <meta name="theme-color" content="#FAFAF7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Rebookly">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="manifest" href="manifest.json">
+  <style>
+    /* Shown for the moment before the app starts: the page colour and the mark, so nothing flashes white. */
+    html, body { margin: 0; height: 100%; background: #FAFAF7; }
+    .boot { position: fixed; inset: 0; display: grid; place-items: center; }
+    .boot img { width: 56px; height: 56px; opacity: .9; }
+    @media (prefers-reduced-motion: no-preference) {
+      .boot img { animation: breathe 1.4s ease-in-out infinite; }
+      @keyframes breathe { 50% { transform: scale(.94); opacity: .6; } }
+    }
+  </style>
+</head>
+<body>
+  <div class="boot" aria-hidden="true"><img src="icons/Icon-192.png" alt=""></div>
+  <script>
+    window.addEventListener('flutter-first-frame', function () {
+      var boot = document.querySelector('.boot');
+      if (boot) boot.remove();
+    });
+  </script>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

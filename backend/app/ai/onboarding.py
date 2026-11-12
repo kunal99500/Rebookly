@@ -4,6 +4,8 @@ The draft uses EXACTLY the same shapes as the normal setup API (BusinessCreate, 
 AvailabilityIn, PolicyDraftIn), so every suggestion passes the same validation as typed input.
 Nothing is saved here. The owner reviews and edits the draft, then applies it.
 """
+from decimal import Decimal
+from decimal import Decimal
 from types import SimpleNamespace
 from typing import Annotated, Literal
 
@@ -140,6 +142,8 @@ class OnboardingDraft(BaseModel):
     policy: PolicyDraftIn
     needs_confirmation: list[ShortText] = Field(default_factory=list, max_length=10)
     questions: list[ShortText] = Field(default_factory=list, max_length=5)
+    deposit_percent: Decimal | None = Field(default=Decimal("10"), ge=1, le=100)
+    deposit_fixed: Decimal | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def _consistent(self) -> "OnboardingDraft":

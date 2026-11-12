@@ -89,6 +89,12 @@ async def apply_setup(
 ):
     """Save the reviewed draft: business, services, opening hours, and a draft cancellation policy."""
     business = await businesses.create_business(session, owner.id, data.business)
+    from app.rules.deposits import deposit_for
+    for service in data.services:
+        if service.kind != "add_on":
+            service.deposit = deposit_for(price=service.price, currency=data.business.currency,
+                                          percent=None if data.deposit_fixed else data.deposit_percent,
+                                          fixed=data.deposit_fixed)
     for service in data.services:
         await offerings.create_service(session, business, owner.id, service)
     if data.hours is not None:

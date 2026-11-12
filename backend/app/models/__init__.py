@@ -25,3 +25,5 @@ from app.models.ai_usage import AIUsage  # noqa: F401
 from app.models.tax_profile import BusinessTaxProfile  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
 from app.models.paypal_event import PayPalWebhookEvent  # noqa: F401
+from app.models.review import Review  # noqa: F401
+from app.models.briefing import DailyBriefing  # noqa: F401

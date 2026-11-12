@@ -45,6 +45,7 @@ async def create_business(session: AsyncSession, owner_id: uuid.UUID, data: Busi
             owner_user_id=owner_id,
             slug=await unique_slug(session, data.name),
             **data.model_dump(),
+            notification_email=contact_email,
         )
         session.add(business)
         audit.record(session, actor_type="owner", actor_id=owner_id, action="business.created",

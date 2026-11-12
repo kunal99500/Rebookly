@@ -8,7 +8,7 @@ from html import escape
 KINDS = (
     "booking_confirmed", "new_booking", "reminder_24h", "reminder_2h", "booking_cancelled",
     "booking_rescheduled", "fee_pending", "fee_charged", "hold_released", "payment_failed", "email_code",
-    "hold_lost", "payment_dispute","waitlist_offer",
+    "hold_lost", "payment_dispute","waitlist_offer","new_review",
 )
 
 
@@ -32,6 +32,11 @@ def _lines(kind: str, p: dict) -> tuple[str, list[str]]:
             f"The booking for {visit} at {biz} on {when} was cancelled ({p.get('by', 'cancelled')}).",
             p.get("outcome", "")]
     if kind == "booking_rescheduled":
+        if p.get("by_owner"):
+            return f"{biz} moved your booking to {when}", [
+                f"{biz} needed to move your booking for {visit}. It's now on {when}.",
+                "If the new time doesn't work for you, you can cancel this booking without a fee.",
+                f"Reference: {p.get('ref')}"]
         return f"Moved: {visit} is now {when}", [f"Your booking for {visit} at {biz} is now on {when}.",
                                                  f"Reference: {p.get('ref')}"]
     if kind == "fee_pending":
@@ -66,6 +71,14 @@ def _lines(kind: str, p: dict) -> tuple[str, list[str]]:
                f"Good news: {visit} at {biz} is free on {when}.",
                f"The first person to book it gets it. This offer ends at {p.get('expires')}.",
                "Open your waitlist in Rebookly to book it."]
+
+    if kind == "new_review":
+        stars = int(p.get("rating") or 0)
+        comment = p.get("comment")
+        return f"New review: {'★' * stars}{'☆' * (5 - stars)} from {p.get('reviewer')}", [
+               f"{p.get('reviewer')} rated {biz} {stars} out of 5 after their visit.",
+               f"“{comment}”" if comment else "",
+               "You can reply publicly from Reviews in Rebookly."]
     if kind == "email_code":
         return "Your Rebookly verification code", [
             f"Your code is {p.get('code')}. It expires in 15 minutes.",

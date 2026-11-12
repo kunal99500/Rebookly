@@ -6,8 +6,10 @@ from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
 from uuid import uuid4
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from app.db import get_session
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field

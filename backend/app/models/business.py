@@ -86,3 +86,6 @@ class Business(UUIDPrimaryKey, Timestamps, Base):
     policies: Mapped[list["BusinessPolicy"]] = relationship(
     back_populates="business", cascade="all, delete-orphan", order_by="BusinessPolicy.version"
     )
+    plan: Mapped[str] = mapped_column(String(10), default="free", server_default="free")
+    pro_until: Mapped[datetime.datetime | None] = mapped_column(DateTime(timezone=True))
+    paypal_subscription_id: Mapped[str | None] = mapped_column(String(64))

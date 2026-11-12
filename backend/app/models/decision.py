@@ -60,3 +60,4 @@ class Decision(UUIDPrimaryKey, Timestamps, Base):
     executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failure_reason: Mapped[str | None] = mapped_column(String(500))
     last_paypal_debug_id: Mapped[str | None] = mapped_column(String(64))
+    platform_fee: Mapped[Decimal | None] = mapped_column(Numeric(10, 2))   # Rebookly's 3%, if any

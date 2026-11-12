@@ -69,6 +69,7 @@ class Booking(UUIDPrimaryKey, Timestamps, Base):
     checked_in_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancelled_by: Mapped[str | None] = mapped_column(String(10))
+    moved_by_owner_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # client may then cancel free
     no_show_marked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     rescheduled_from_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("bookings.id", ondelete="SET NULL")

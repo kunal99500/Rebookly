@@ -92,6 +92,7 @@ class BookingOut(BaseModel):
     payment_option: str
     confirmation_number: str | None
     attendee_name: str | None
+    check_in_token: str | None = None
 
 
 

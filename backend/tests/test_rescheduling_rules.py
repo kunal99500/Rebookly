@@ -38,8 +38,36 @@ def test_new_time_beyond_the_hold_window_is_refused():
 
 
 @pytest.mark.parametrize("new_start, message", [
-    (START, "already have"),
+    (START, "already booked"),
     (NOW - timedelta(minutes=1), "future"),
 ])
 def test_pointless_or_past_moves_are_refused(new_start, message):
     assert message in problem(new_start)
+
+
+
+# ---------- moves by the owner ----------
+
+from app.rules.engine import Event  # noqa: E402
+from app.rules.rescheduling import engine_event_for_cancellation  # noqa: E402
+
+
+def test_owner_can_move_inside_the_late_window():
+    late_now = START - timedelta(hours=2)
+    assert problem(START + timedelta(hours=1), now=late_now) is not None       # a client can't
+    assert reschedule_problem(now=late_now, current_start=START, new_start=START + timedelta(hours=1),
+                              free_cancel_hours=24, honor_period_ends_at=HONOR_END, by_owner=True) is None
+
+
+def test_owner_still_respects_the_hold_window_and_the_start():
+    assert "too far ahead" in reschedule_problem(now=NOW, current_start=START, new_start=HONOR_END + timedelta(hours=1),
+                                                 free_cancel_hours=24, honor_period_ends_at=HONOR_END, by_owner=True)
+    assert "already started" in reschedule_problem(now=START + timedelta(minutes=5), current_start=START,
+                                                   new_start=START + timedelta(hours=1), free_cancel_hours=24,
+                                                   honor_period_ends_at=HONOR_END, by_owner=True)
+
+
+def test_cancelling_after_an_owner_move_is_free():
+    assert engine_event_for_cancellation(Event.CLIENT_CANCELLED, moved_by_owner=True) == Event.OWNER_CANCELLED
+    assert engine_event_for_cancellation(Event.CLIENT_CANCELLED, moved_by_owner=False) == Event.CLIENT_CANCELLED
+    assert engine_event_for_cancellation(Event.NO_SHOW, moved_by_owner=True) == Event.NO_SHOW

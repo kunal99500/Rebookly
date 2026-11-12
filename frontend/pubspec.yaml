@@ -1,0 +1,61 @@
+name: rebookly_frontend
+description: Rebookly web app for clients and business owners.
+publish_to: none
+version: 0.2.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.27.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_riverpod: ^2.6.1
+  go_router: ^14.8.1
+  dio: ^5.8.0+1
+  supabase_flutter: ^2.8.4
+  intl: ^0.20.2
+  timezone: ^0.10.0
+  url_launcher: ^6.3.1
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.0
+  qr_flutter: ^4.1.0
+  record: ^5.2.0
+  file_picker: ^8.1.2
+  mobile_scanner: ^5.2.3
+  shared_preferences: ^2.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/i18n/
+  fonts:
+    # Bundled so the app never asks Google for fonts and text never jumps while loading.
+    # Both families are under the SIL Open Font License (see the OFL files in assets/fonts).
+    - family: Figtree
+      fonts:
+        - asset: assets/fonts/Figtree-400.ttf
+          weight: 400
+        - asset: assets/fonts/Figtree-500.ttf
+          weight: 500
+        - asset: assets/fonts/Figtree-600.ttf
+          weight: 600
+        - asset: assets/fonts/Figtree-700.ttf
+          weight: 700
+    - family: Bricolage
+      fonts:
+        - asset: assets/fonts/BricolageGrotesque-500.ttf
+          weight: 500
+        - asset: assets/fonts/BricolageGrotesque-700.ttf
+          weight: 700
+        - asset: assets/fonts/BricolageGrotesque-800.ttf
+          weight: 800

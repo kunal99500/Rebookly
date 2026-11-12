@@ -49,12 +49,11 @@ async def booking_confirmed(session: AsyncSession, booking: Booking) -> None:
     await _send(session, booking, "new_booking", business.notification_email, "owner", facts, owner_link)
 
 
-async def booking_rescheduled(session: AsyncSession, booking: Booking) -> None:
+async def booking_rescheduled(session: AsyncSession, booking: Booking, by_owner: bool = False) -> None:
     business, client, facts = await _facts(session, booking)
     client_link, _ = _links()
-    await _send(session, booking, "booking_rescheduled", _client_email(client), "client", facts, client_link,
-                suffix=f":{booking.starts_at.isoformat()}")
-
+    await _send(session, booking, "booking_rescheduled", _client_email(client), "client",
+                {**facts, "by_owner": by_owner}, client_link, suffix=f":{booking.starts_at.isoformat()}")
 
 async def booking_outcome(session: AsyncSession, booking: Booking, decision: Decision) -> None:
     """Cancellations to both sides; fees waiting for approval to the owner."""

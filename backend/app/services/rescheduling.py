@@ -36,6 +36,7 @@ async def _service_ids(session: AsyncSession, booking: Booking) -> list[uuid.UUI
 
 async def options(
     session: AsyncSession, booking: Booking, day: date | None = None, staff_id: uuid.UUID | None = None,
+    by_owner: bool = False,
 ) -> list[availability.TimeOption]:
     """Times this booking could move to (its own current time isn't counted as busy)."""
     now = get_clock().now()
@@ -48,7 +49,8 @@ async def options(
     allowed = [
         t for t in times
         if reschedule_problem(now=now, current_start=booking.starts_at, new_start=t.starts_at,
-                              free_cancel_hours=free_hours, honor_period_ends_at=payment.honor_period_ends_at) is None
+                              free_cancel_hours=free_hours, honor_period_ends_at=payment.honor_period_ends_at,
+                              by_owner=by_owner) is None
     ]
     if day is not None:
         allowed = [t for t in allowed if t.starts_at.astimezone(tz).date() == day]
@@ -60,6 +62,7 @@ async def reschedule(
     actor_type: str, actor_id: uuid.UUID | None,
 ) -> Booking:
     now = get_clock().now()
+    by_owner = actor_type == "owner"
     booking = await session.scalar(select(Booking).where(Booking.id == booking_id).with_for_update())
     if booking is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Booking not found")
@@ -71,7 +74,7 @@ async def reschedule(
     problem = reschedule_problem(
         now=now, current_start=booking.starts_at, new_start=new_start,
         free_cancel_hours=int(booking.policy_snapshot.get("free_cancel_hours", 0)),
-        honor_period_ends_at=payment.honor_period_ends_at)
+        honor_period_ends_at=payment.honor_period_ends_at, by_owner=by_owner)
     if problem:
         raise _conflict(problem)
 
@@ -90,16 +93,19 @@ async def reschedule(
     occupied = booking.occupied_until - booking.starts_at
     booking.starts_at, booking.ends_at, booking.occupied_until = new_start, new_start + visit, new_start + occupied
     booking.staff_id, booking.location_id = chosen.id, chosen.location_id
+    if by_owner:
+        booking.moved_by_owner_at = now   # the client may now cancel this booking without a fee
     audit.record(session, actor_type=actor_type, actor_id=actor_id, action="booking.rescheduled",
                  business_id=booking.business_id, booking_id=booking.id,
-                 details={"from": old_start.isoformat(), "to": new_start.isoformat(), "staff_id": str(chosen.id)})
+                 details={"from": old_start.isoformat(), "to": new_start.isoformat(), "staff_id": str(chosen.id),
+                          "by_owner": by_owner})
     try:
         await session.flush()   # the database's overlap protection checks the new time here
     except IntegrityError:
         await session.rollback()
         raise _conflict("Sorry, that time was just taken. Please pick another.")
     await issue_safely(session, issue_confirmation(session, booking, replace=True))  # new confirmation, new time
-    await notify_safely(session, booking_messages.booking_rescheduled(session, booking))  # email the client
+    await notify_safely(session, booking_messages.booking_rescheduled(session, booking, by_owner))
     await session.commit()
     await session.refresh(booking)
     return booking

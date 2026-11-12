@@ -16,20 +16,24 @@ from app.services import audit
 
 
 async def find_refill(session: AsyncSession, cancelled: Booking) -> Booking | None:
-    """A confirmed booking made after the cancellation that took the freed time (same person or same class)."""
-    same_place = (Booking.slot_id == cancelled.slot_id) if cancelled.slot_id else and_(
-        Booking.staff_id == cancelled.staff_id, Booking.starts_at < cancelled.occupied_until,
-        Booking.occupied_until > cancelled.starts_at)
-    candidates = await session.scalars(select(Booking).where(
-        Booking.business_id == cancelled.business_id, Booking.id != cancelled.id,
-        Booking.status.in_(("confirmed", "attended")), Booking.created_at > cancelled.cancelled_at, same_place))
-    for new in candidates:
-        if is_refill(cancelled_at=cancelled.cancelled_at, freed_start=cancelled.starts_at,
-                     freed_end=cancelled.occupied_until, freed_staff_id=cancelled.staff_id,
-                     freed_slot_id=cancelled.slot_id, new_start=new.starts_at, new_end=new.occupied_until,
-                     new_staff_id=new.staff_id, new_slot_id=new.slot_id, new_created_at=new.created_at):
-            return new
-    return None
+       """A booking whose deposit hold was placed after the cancellation, on the freed time (same person or class).
+
+       "After" is judged by the hold's authorization time, which uses the app's clock like the cancellation does.
+       """
+       same_place = (Booking.slot_id == cancelled.slot_id) if cancelled.slot_id else and_(
+           Booking.staff_id == cancelled.staff_id, Booking.starts_at < cancelled.occupied_until,
+           Booking.occupied_until > cancelled.starts_at)
+       candidates = await session.execute(select(Booking, Payment.authorized_at).join(
+           Payment, and_(Payment.booking_id == Booking.id, Payment.kind == "hold")).where(
+           Booking.business_id == cancelled.business_id, Booking.id != cancelled.id,
+           Booking.status.in_(("confirmed", "attended")), Payment.authorized_at > cancelled.cancelled_at, same_place))
+       for new, held_at in candidates:
+           if is_refill(cancelled_at=cancelled.cancelled_at, freed_start=cancelled.starts_at,
+                        freed_end=cancelled.occupied_until, freed_staff_id=cancelled.staff_id,
+                        freed_slot_id=cancelled.slot_id, new_start=new.starts_at, new_end=new.occupied_until,
+                        new_staff_id=new.staff_id, new_slot_id=new.slot_id, new_created_at=held_at):
+               return new
+       return None
 
 
 async def waive_if_refilled(session: AsyncSession, decision_id: uuid.UUID) -> uuid.UUID | None:

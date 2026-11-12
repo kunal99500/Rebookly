@@ -21,6 +21,7 @@ from app.media.storage import SupabaseStorage
 from app.notifications.senders import ConsoleEmailSender, ResendEmailSender
 from app.payments.paypal import PayPalClient
 from app.security.phone import PhoneProtector
+from app.auth.firebase_auth import AuthVerifier, FirebaseTokenVerifier
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(name)s  %(message)s")
 logger = logging.getLogger("rebookly")
@@ -45,10 +46,10 @@ async def lifespan(app: FastAPI):
     # ---------- Sign-in (verifies Supabase login tokens) ----------
     app.state.auth = None
     if settings.supabase_url:
-        app.state.auth = SupabaseTokenVerifier(
-            settings.supabase_url,
-            legacy_jwt_secret=settings.supabase_jwt_secret.get_secret_value() or None,
-        )
+        app.state.auth = AuthVerifier(
+        supabase=SupabaseTokenVerifier(settings.supabase_url, settings.supabase_jwt_secret),
+        firebase=FirebaseTokenVerifier(settings.firebase_project_id) if settings.firebase_project_id else None,
+    )
     else:
         logger.warning("SUPABASE_URL is missing: sign-in is disabled.")
 
@@ -93,6 +94,8 @@ async def lifespan(app: FastAPI):
         logger.warning("PayPal credentials are missing: payment features are disabled.")
 
     # ---------- AI (OpenAI, traced in Langfuse and recorded in ai_usage) ----------
+    from app.ai.transcription import Transcriber
+    app.state.transcriber = Transcriber(settings.llm_api_key.get_secret_value()) if settings.llm_api_key else None
     app.state.ai = None
     llm_key = settings.llm_api_key.get_secret_value()
     if llm_key and settings.llm_model:
@@ -209,7 +212,17 @@ def create_app() -> FastAPI:
     from app.routers.public import documents as public_documents
     from app.routers.public import geo as public_geo
     from app.routers.public import search as public_search
-    for module in (public_businesses, public_compliance, public_documents, public_geo, public_search):
+    from app.routers.public import reviews as public_reviews
+    from app.routers import voice
+    from app.routers.owner import deposits as owner_deposits
+    from app.payments.subscriptions import PayPalSubscriptions
+    from app.routers.owner import plan as owner_plan
+    app.include_router(owner_plan.router)
+    app.state.subscriptions = PayPalSubscriptions(
+        settings.paypal_client_id, settings.paypal_client_secret.get_secret_value(), settings.paypal_env)
+ 
+    for module in (public_businesses, public_compliance, public_documents, public_geo,
+                    public_search, public_reviews,owner_deposits,voice):
         app.include_router(module.router)
 
     # ---------- Checkout (signed links, no sign-in) ----------
@@ -224,7 +237,10 @@ def create_app() -> FastAPI:
     from app.routers.client import assistant as client_assistant
     from app.routers.client import bookings as client_bookings
     from app.routers.client import waitlist as client_waitlist
-    for module in (client_bookings, client_assistant, client_waitlist):
+    from app.routers.client import reviews as client_reviews
+    from app.routers.client import account as client_account
+    for module in (client_bookings, client_assistant, client_waitlist,
+                    client_reviews, client_account):
         app.include_router(module.router)
 
     # ---------- Owner API (signed-in business owners) ----------
@@ -241,12 +257,16 @@ def create_app() -> FastAPI:
     from app.routers.owner import services as owner_services
     from app.routers.owner import team as owner_team
     from app.routers.owner import paypal as owner_paypal
+    from app.routers.owner import reviews as owner_reviews
+    from app.routers.owner import rescheduling as owner_rescheduling
+    from app.routers.owner import briefing as owner_briefing
+    
     for module in (
         # Setting up the business
         owner_onboarding, owner_businesses, owner_location, owner_compliance,owner_paypal, owner_services, owner_policies,
         owner_schedule, owner_team, owner_photos,
         # Running it day to day
-        owner_bookings, owner_decisions, owner_dashboard,
+        owner_bookings, owner_decisions, owner_dashboard, owner_rescheduling, owner_briefing
     ):
         app.include_router(module.router)
 

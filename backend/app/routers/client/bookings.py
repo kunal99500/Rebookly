@@ -117,6 +117,7 @@ async def _booking_out(session: AsyncSession, booking: Booking) -> BookingOut:
            price=booking.price, held_amount=booking.held_amount, currency=booking.currency,
            payment_option=booking.payment_option, confirmation_number=booking.confirmation_number,
            attendee_name=booking.attendee_name,
+           check_in_token=booking.check_in_token if booking.status == "confirmed" else None,
        )
 
 

@@ -187,11 +187,15 @@ class PayPalClient:
         final_capture: bool = True,
         request_id: str,
         note: str | None = None,
+        platform_fee: Decimal | None = None
     ) -> dict:
         """Capture all (amount=None) or part of an authorization.
 
         request_id is required: captures move money, so retries must be idempotent.
         """
+        if platform_fee and platform_fee > 0:
+            body["payment_instruction"] = {"platform_fees": [{"amount": {
+                "currency_code": currency, "value": f"{platform_fee:.2f}"}}]}
         body: dict[str, Any] = {"final_capture": final_capture}
         if amount is not None:
             if not currency:

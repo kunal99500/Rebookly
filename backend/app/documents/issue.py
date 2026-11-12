@@ -101,8 +101,8 @@ async def _tax_section(session: AsyncSession, booking: Booking, doc_type: str, c
            currency=booking.currency, on_visit_total=True, **registration,
        )
 
-async def _save(session: AsyncSession, booking: Booking, doc_type: str, decision: Decision | None,
-                   replaces: Document | None = None, **extra) -> Document:
+async def _save(session: AsyncSession, booking: Booking, doc_type: str, source: Decision | None,
+                replaces: Document | None = None, **extra) -> Document:
     sequence = 1 + await session.scalar(select(func.count()).select_from(Document).where(
         Document.booking_id == booking.id, Document.type == doc_type))
     number = document_number(booking.confirmation_number, doc_type, sequence)
@@ -116,7 +116,7 @@ async def _save(session: AsyncSession, booking: Booking, doc_type: str, decision
        )
     document = Document(
         id=uuid.uuid4(), business_id=booking.business_id, booking_id=booking.id,
-        decision_id=decision.id if decision else None, type=doc_type, number=number,
+        decision_id=source.id if source else None, type=doc_type, number=number,
         snapshot=snapshot, access_token=secrets.token_urlsafe(32),
         replaces_document_id=replaces.id if replaces else None,
     )

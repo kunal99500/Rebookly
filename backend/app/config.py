@@ -34,7 +34,9 @@ class Settings(BaseSettings):
     default_currency: str = "USD"
     paypal_partner_merchant_id: str = ""            # Rebookly's own PayPal merchant (account) ID
     paypal_require_connected_account: bool = False  # true in production: only connected businesses take bookings
-
+    paypal_pro_plan_id: str = ""                  # from scripts/create_pro_plan.py
+    pro_price_label: str = "₹499 a month"
+    platform_fees_enabled: bool = False 
     # ===== Supabase (Phase 2) =====
     supabase_url: str = ""
     supabase_service_role_key: SecretStr = SecretStr("")
@@ -69,11 +71,13 @@ class Settings(BaseSettings):
     resend_api_key: SecretStr = SecretStr("")
     email_from: str = "Rebookly <onboarding@resend.dev>"
 
-
+    firebase_project_id: str = ""      # clients sign in with Firebase phone codes
    
     # ===== Development only =====
     enable_dev_routes: bool = False
     simulated_clock: bool = False
+
+                # turn on once PayPal approves platform fees
 
     enable_jobs: bool = True  # background jobs (release unpaid bookings, recover payments)
 
