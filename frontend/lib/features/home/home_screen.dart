@@ -2,14 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/tokens.dart';
+import '../../core/config.dart';
 import '../../core/i18n/i18n.dart';
 import '../../shared/brand.dart';
 import '../../shared/language_button.dart';
 import '../../shared/layout.dart';
+import '../../shared/money_state.dart';
 import 'landing_mockups.dart';
 import 'landing_parts.dart';
 
-/// The landing page: hero, the problem, the solution, the no-show shield and how it works.
+/// The landing page: hero, the problem, the solution, the no-show shield, pricing and how it works.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -22,7 +24,16 @@ class _HomeScreenState extends State<HomeScreen> {
   final _clients = GlobalKey();
   final _businesses = GlobalKey();
   final _shield = GlobalKey();
+  final _pricing = GlobalKey();
   final _features = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _scrollTo(_pricing);
+    });
+  }
 
   void _scrollTo(GlobalKey key) {
     final target = key.currentContext;
@@ -44,6 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ('land.nav.clients', _clients),
             ('land.nav.businesses', _businesses),
             ('land.nav.shield', _shield),
+            ('land.nav.pricing', _pricing),
             ('land.nav.features', _features),
           ],
           onLink: _scrollTo,
@@ -55,6 +67,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const _Problem(),
           _Solution(featuresKey: _features, clientsKey: _clients, businessesKey: _businesses),
           _Shield(key: _shield),
+          _Pricing(key: _pricing),
           _HowItWorks(key: _how),
           const _Closing(),
           const _Footer(),
@@ -299,7 +312,9 @@ class TwoCards extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= Breakpoints.wide;
-    if (!wide) return Column(children: [left, const SizedBox(height: Space.xl), right]);
+    if (!wide) {
+      return Column(children: [left, const SizedBox(height: Space.xl), right]);
+    }
     return IntrinsicHeight(
       child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Expanded(child: left),
@@ -546,6 +561,147 @@ class _Shield extends StatelessWidget {
       ),
     );
   }
+}
+
+// ---------- pricing ----------
+
+class _Pricing extends StatelessWidget {
+  const _Pricing({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Band(
+      top: 40,
+      bottom: 40,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Eyebrow(context.tr('land.pricing.eyebrow')),
+        const SizedBox(height: Space.md),
+        Text(context.tr('land.pricing.title'), style: text.displaySmall, textAlign: TextAlign.center),
+        const SizedBox(height: Space.xl),
+        TwoCards(
+          left: _PlanCard(
+            name: context.tr('land.pricing.free.name'),
+            price: context.tr('land.pricing.free.price'),
+            summary: context.tr('land.pricing.free.fee', {'percent': 3}),
+            badge: StatusPill(context.tr('land.pricing.free.badge'), state: MoneyState.released),
+            points: [
+              context.tr('land.pricing.free.point1'),
+              context.tr('land.pricing.free.point2'),
+              context.tr('land.pricing.free.point3'),
+              context.tr('land.pricing.free.point4'),
+              context.tr('land.pricing.free.point5'),
+            ],
+            button: FilledButton(
+              onPressed: () => context.go('/business/start'),
+              child: Text(context.tr('land.pricing.free.button')),
+            ),
+          ),
+          right: _PlanCard(
+            name: context.tr('land.pricing.pro.name'),
+            price: context.tr('land.pricing.pro.price', {'price': AppConfig.proPriceLabel}),
+            summary: context.tr('land.pricing.pro.summary'),
+            points: [
+              context.tr('land.pricing.pro.point1'),
+              context.tr('land.pricing.pro.point2'),
+              context.tr('land.pricing.pro.point3'),
+              context.tr('land.pricing.pro.point4'),
+            ],
+            button: OutlinedButton(
+              onPressed: () => context.go('/business/start'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Palette.forest,
+                side: const BorderSide(color: Palette.forest),
+              ),
+              child: Text(context.tr('land.pricing.pro.button')),
+            ),
+          ),
+        ),
+        const SizedBox(height: Space.lg),
+        Text(context.tr('land.pricing.note.clients'), style: text.bodySmall?.copyWith(color: Palette.muted)),
+        Text(context.tr('land.pricing.note.deposit'), style: text.bodySmall?.copyWith(color: Palette.muted)),
+        const SizedBox(height: Space.xl),
+        Panel(
+          child: Center(
+            child: Text(
+              context.tr('land.pricing.example'),
+              style: text.titleMedium?.copyWith(color: Palette.ink),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+        const SizedBox(height: Space.xxl),
+        Questions(items: [
+          (context.tr('land.pricing.faq1.question'), context.tr('land.pricing.faq1.answer')),
+          (context.tr('land.pricing.faq2.question'), context.tr('land.pricing.faq2.answer')),
+          (context.tr('land.pricing.faq3.question'), context.tr('land.pricing.faq3.answer')),
+          (context.tr('land.pricing.faq4.question'), context.tr('land.pricing.faq4.answer')),
+        ]),
+      ]),
+    );
+  }
+}
+
+class _PlanCard extends StatelessWidget {
+  const _PlanCard({
+    required this.name,
+    required this.price,
+    required this.summary,
+    required this.points,
+    required this.button,
+    this.badge,
+  });
+
+  final String name;
+  final String price;
+  final String summary;
+  final List<String> points;
+  final Widget button;
+  final Widget? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: Palette.surface,
+        borderRadius: BorderRadius.circular(Radii.sheet),
+        border: Border.all(color: Palette.line),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        if (badge != null) ...[badge!, const SizedBox(height: Space.md)],
+        Text(name, style: text.headlineMedium),
+        const SizedBox(height: Space.sm),
+        Text(price, style: text.displaySmall?.copyWith(fontFeatures: Fonts.tabular)),
+        const SizedBox(height: Space.sm),
+        Text(summary, style: text.bodyLarge?.copyWith(color: Palette.muted)),
+        const SizedBox(height: Space.lg),
+        for (final point in points) ...[
+          _PricingPoint(point),
+          const SizedBox(height: Space.md),
+        ],
+        const SizedBox(height: Space.sm),
+        SizedBox(width: double.infinity, child: button),
+      ]),
+    );
+  }
+}
+
+class _PricingPoint extends StatelessWidget {
+  const _PricingPoint(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.check_rounded, size: 20, color: Palette.forest),
+          const SizedBox(width: Space.sm),
+          Expanded(child: Text(label, style: Theme.of(context).textTheme.bodyMedium)),
+        ],
+      );
 }
 
 // ---------- how it works ----------
