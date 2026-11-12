@@ -1,4 +1,4 @@
-"""Business logic for a business's services (what it sells).
+﻿"""Business logic for a business's services (what it sells).
 
 Named "offerings" so it isn't confused with the app.services package itself.
 """
@@ -14,7 +14,7 @@ from app.services import audit , team
 
 
 async def create_service(session: AsyncSession, business: Business, owner_id: uuid.UUID, data: ServiceCreate) -> Service:
-    service = Service(id=uuid.uuid4(), business_id=business.id, **data.model_dump())
+    service = Service(id=uuid.uuid4(), business_id=business.id, **data.model_dump(exclude_none=True))
     session.add(service)
     await session.flush()
     await team.link_service_to_all_staff(session, business, service.id)
