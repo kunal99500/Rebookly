@@ -32,7 +32,6 @@ class BusinessCreate(BaseModel):
     address: str | None = Field(default=None, max_length=300)
     latitude: Decimal | None = Field(default=None, ge=-90, le=90, decimal_places=6)
     longitude: Decimal | None = Field(default=None, ge=-180, le=180, decimal_places=6)
-    capacity: int | None = Field(default=None, ge=1, le=500)
     _tz = field_validator("timezone")(_check_timezone)
 
 
@@ -58,7 +57,6 @@ class BusinessUpdate(BaseModel):
     notification_email: EmailStr | None = None
     deposit_notice_timing: Literal["business_page", "booking_start", "checkout"] | None = None
     deposit_notice_note: str | None = Field(default=None, max_length=160)
-    capacity: int | None = Field(default=None, ge=1, le=500)
     @model_validator(mode="after")
     def _no_empty_required_fields(self) -> "BusinessUpdate":
         for field in ("name", "category", "timezone", "currency", "privacy_mode", "listed_publicly", "vocabulary"):

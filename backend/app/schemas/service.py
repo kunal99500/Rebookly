@@ -28,6 +28,7 @@ class ServiceCreate(BaseModel):
     kind: ServiceKind = "main"
     booking_mode: BookingMode = "appointment"
     duration_minutes: int = Field(ge=5, le=720)
+    capacity: int | None = Field(default=None, ge=1, le=500)
     cleanup_minutes: int = Field(default=0, ge=0, le=240, description="Free time kept after the visit")
     price: Decimal = Money
     deposit: Decimal = Money
@@ -51,6 +52,7 @@ class ServiceUpdate(BaseModel):
     kind: ServiceKind | None = None
     booking_mode: BookingMode | None = None
     duration_minutes: int | None = Field(default=None, ge=5, le=720)
+    capacity: int | None = Field(default=None, ge=1, le=500)
     cleanup_minutes: int | None = Field(default=None, ge=0, le=240)
     price: Decimal | None = Field(default=None, ge=0, le=100000, max_digits=8, decimal_places=2)
     deposit: Decimal | None = Field(default=None, ge=0, le=100000, max_digits=8, decimal_places=2)
