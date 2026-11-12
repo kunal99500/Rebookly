@@ -42,3 +42,17 @@ async def update_business(
 ):
     """Change only the fields that are sent."""
     return await businesses.update_business(session, business, owner.id, data)
+
+
+
+@router.post("/{business_id}/go-live")
+async def go_live(
+    business: Business = Depends(get_owned_business),
+    owner: AuthUser = Depends(get_owner),
+    session: AsyncSession = Depends(get_session),
+):
+    """Open the business for bookings. If something required is missing, the answer lists exactly what."""
+    from app.config import get_settings
+    single_merchant = not get_settings().paypal_require_connected_account
+    business = await businesses.go_live(session, business, owner.id, single_merchant)
+    return {"status": business.status, "slug": business.slug}
