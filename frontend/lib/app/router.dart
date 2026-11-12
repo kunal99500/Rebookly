@@ -78,6 +78,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       // ---------- sign-in ----------
       GoRoute(path: '/signin', builder: (context, state) => const ClientSignInScreen()),
+      GoRoute(path: '/signup', builder: (context, state) => const ClientSignInScreen(isSignUp: true)),
       GoRoute(path: '/business/signin', builder: (context, state) => const OwnerSignInScreen()),
 
       // ---------- clients ----------
@@ -186,8 +187,10 @@ String? _guard(AuthService auth, GoRouterState state) {
   if (ownerArea && !auth.isOwnerSignedIn) {
     return Uri(path: '/business/signin', queryParameters: {'from': here}).toString();
   }
-  final signedInHere = (path == '/signin' && auth.isClientSignedIn) || (path == '/business/signin' && auth.isOwnerSignedIn);
+  final signedInHere = ((path == '/signin' || path == '/signup') && auth.isClientSignedIn) ||
+      (path == '/business/signin' && auth.isOwnerSignedIn);
   if (signedInHere) {
+    if (path == '/signup') return '/search';
     final from = state.uri.queryParameters['from'];
     // Only go back to our own pages (never to another site).
     if (from != null && from.startsWith('/') && !from.startsWith('//')) return from;

@@ -10,10 +10,12 @@ import '../../core/auth/auth_service.dart';
 import '../../shared/brand.dart';
 import 'auth_layout.dart';
 
-/// Clients sign in with their phone: a number, then a 6-digit code. No password to remember.
-/// After a successful sign-in the router takes them back to where they were going.
+/// Clients create or access their account with a phone number and a 6-digit code.
+/// After verification, the router returns them to the page they requested.
 class ClientSignInScreen extends ConsumerStatefulWidget {
-  const ClientSignInScreen({super.key});
+  const ClientSignInScreen({super.key, this.isSignUp = false});
+
+  final bool isSignUp;
 
   @override
   ConsumerState<ClientSignInScreen> createState() => _ClientSignInScreenState();
@@ -106,12 +108,21 @@ class _ClientSignInScreenState extends ConsumerState<ClientSignInScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           BrandMark(),
           SizedBox(height: 48),
-          Text(codeStep ? context.tr('signin.enter_code') : context.tr('signin.title'), style: text.displaySmall),
+          Text(
+            codeStep
+                ? context.tr('signin.enter_code')
+                : widget.isSignUp
+                    ? context.tr('signup.title')
+                    : context.tr('signin.title'),
+            style: text.displaySmall,
+          ),
           SizedBox(height: Space.md),
           Text(
             codeStep
                 ? context.tr('signin.sent', {'phone': _sentTo})
-                : context.tr('signin.no_password'),
+                : widget.isSignUp
+                    ? context.tr('signup.lead')
+                    : context.tr('signin.no_password'),
             style: text.bodyLarge?.copyWith(color: Palette.muted),
           ),
           SizedBox(height: Space.xxl),
@@ -164,7 +175,11 @@ class _ClientSignInScreenState extends ConsumerState<ClientSignInScreen> {
               onPressed: _busy ? null : (codeStep ? _verify : _sendCode),
               child: _busy
                   ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
-                  : Text(codeStep ? context.tr('signin.verify') : context.tr('signin.send')),
+                  : Text(codeStep
+                      ? widget.isSignUp
+                          ? context.tr('signup.verify')
+                          : context.tr('signin.verify')
+                      : context.tr('signin.send')),
             ),
           ),
           if (codeStep) ...[
@@ -185,7 +200,7 @@ class _ClientSignInScreenState extends ConsumerState<ClientSignInScreen> {
           ],
           SizedBox(height: 40),
           Text(
-            context.tr('signin.privacy'),
+            widget.isSignUp ? context.tr('signup.privacy') : context.tr('signin.privacy'),
             style: text.bodySmall,
           ),
         ]),

@@ -1,4 +1,6 @@
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -26,6 +28,9 @@ Future<void> main() async {
         messagingSenderId: AppConfig.firebaseMessagingSenderId,
       ),
     );
+    if (kIsWeb) {
+      await firebase_auth.FirebaseAuth.instance.setPersistence(firebase_auth.Persistence.LOCAL);
+    }
   }
   final strings = await Strings.load(await startingLanguage());
   runApp(ProviderScope(

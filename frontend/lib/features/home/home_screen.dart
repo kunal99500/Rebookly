@@ -5,7 +5,6 @@ import '../../app/tokens.dart';
 import '../../core/config.dart';
 import '../../core/i18n/i18n.dart';
 import '../../shared/brand.dart';
-import '../../shared/language_button.dart';
 import '../../shared/layout.dart';
 import '../../shared/money_state.dart';
 import 'landing_mockups.dart';
@@ -26,14 +25,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final _shield = GlobalKey();
   final _pricing = GlobalKey();
   final _features = GlobalKey();
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _scrollTo(_pricing);
-    });
-  }
 
   void _scrollTo(GlobalKey key) {
     final target = key.currentContext;
@@ -63,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: SingleChildScrollView(
         child: Column(children: [
-          _Hero(onClients: () => context.go('/search'), onBusinesses: () => context.go('/business/start')),
+          _Hero(onClients: () => context.go('/signup'), onBusinesses: () => context.go('/business/start')),
           const _Problem(),
           _Solution(featuresKey: _features, clientsKey: _clients, businessesKey: _businesses),
           _Shield(key: _shield),
@@ -109,15 +100,6 @@ class _Header extends StatelessWidget {
                       child: Text(context.tr(key)),
                     ),
                 const SizedBox(width: Space.sm),
-                const LanguageButton(),
-                if (MediaQuery.sizeOf(context).width > 520) ...[
-                  OutlinedButton(
-                    onPressed: () => context.go('/signin'),
-                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), foregroundColor: Palette.forest, side: const BorderSide(color: Palette.forest)),
-                    child: Text(context.tr('account.sign_in')),
-                  ),
-                  const SizedBox(width: Space.sm),
-                ],
                 FilledButton(
                   onPressed: () => context.go('/business/start'),
                   style: FilledButton.styleFrom(minimumSize: const Size(0, 42)),
@@ -791,7 +773,7 @@ class _Closing extends StatelessWidget {
               Text(context.tr('land.ready_body'), style: text.bodyLarge?.copyWith(color: Palette.muted)),
             ]),
             Wrap(spacing: Space.md, runSpacing: Space.md, children: [
-              FilledButton(onPressed: () => context.go('/search'), child: Text(context.tr('land.find_service'))),
+              FilledButton(onPressed: () => context.go('/signup'), child: Text(context.tr('land.find_service'))),
               OutlinedButton(
                 onPressed: () => context.go('/business/start'),
                 style: OutlinedButton.styleFrom(foregroundColor: Palette.forest, side: const BorderSide(color: Palette.forest, width: 1.4)),
