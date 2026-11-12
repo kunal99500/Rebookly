@@ -1,102 +1,180 @@
-# Rebookly web app (Flutter)
+# Rebookly frontend
 
-The client booking site and the business owner workspace, in one Flutter web app.
+The frontend is a Flutter web application for both people booking appointments and businesses managing their day-to-day operations. It uses clean browser paths (for example, `/b/example/book`) so links can be shared and browser navigation works as expected.
 
-## Run it
+## Requirements and setup
 
-**One-time setup** (needs Flutter 3.27 or newer):
+- Flutter 3.27 or newer and Dart 3.5 or newer (see `pubspec.yaml`)
+- Chrome for local browser development
+- A running Rebookly backend for API-backed functionality
 
-```bash
-flutter create --platforms web .   # adds any missing web files; our web/index.html, icons and manifest are kept
+From this directory:
+
+```powershell
 flutter pub get
 ```
 
-**Start it in Chrome on port 5000** (the backend's `FRONTEND_URL` must be `http://localhost:5000` so the browser is allowed to call the API):
+The app's build-time settings are declared in `lib/core/config.dart`. Supply them with `--dart-define` or `--dart-define-from-file`; do not put server secrets in either. The `dart_defines.json` file used by `run.ps1` is local and Git-ignored. Do not commit it.
 
-```bash
-flutter run -d chrome --web-port 5000 \
-  --dart-define=API_BASE_URL=http://localhost:8000 \
-  --dart-define=SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co \
-  --dart-define=SUPABASE_ANON_KEY=YOUR_ANON_KEY
+### Run locally
+
+Start the backend on port `8000` and make sure its `FRONTEND_URL` is `http://localhost:5000`. Then run the web app with your local service configuration:
+
+```powershell
+flutter run -d chrome --web-port 5000 --dart-define=API_BASE_URL=http://localhost:8000 --dart-define=SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co --dart-define=SUPABASE_ANON_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY --dart-define=FIREBASE_API_KEY=YOUR_FIREBASE_WEB_API_KEY --dart-define=FIREBASE_AUTH_DOMAIN=YOUR_PROJECT.firebaseapp.com --dart-define=FIREBASE_PROJECT_ID=YOUR_FIREBASE_PROJECT_ID --dart-define=FIREBASE_APP_ID=YOUR_FIREBASE_WEB_APP_ID --dart-define=FIREBASE_MESSAGING_SENDER_ID=YOUR_FIREBASE_SENDER_ID
 ```
 
-On Windows PowerShell, put it on one line (or use a backtick ` at the end of each line instead of `\`).
+To disable authentication integrations for a local UI run, explicitly pass empty Supabase defines and leave out the Firebase defines; the corresponding sign-in and API-backed functionality will not be available. The default development web origin (`localhost:5000`) must match the backend CORS setting.
 
-**Checks:**
+| Define | Used for |
+|---|---|
+| `API_BASE_URL` | Rebookly backend base URL. Use `http://localhost:8000` locally and the deployed HTTPS API URL for a production build. |
+| `SUPABASE_URL` | Supabase project URL for business-owner email sign-in. |
+| `SUPABASE_ANON_KEY` | Supabase publishable/anon key for the client app. This is intentionally client-visible; never use the service-role key. |
+| `FIREBASE_API_KEY` | Firebase web-app API key for client phone sign-in. |
+| `FIREBASE_AUTH_DOMAIN` | Firebase web app auth domain. |
+| `FIREBASE_PROJECT_ID` | Firebase project ID. |
+| `FIREBASE_APP_ID` | Firebase web-app ID. |
+| `FIREBASE_MESSAGING_SENDER_ID` | Firebase messaging sender ID. |
 
-```bash
+Firebase web configuration and Supabase publishable keys are public client configuration, not backend credentials. The backend verifies identity tokens and enforces authorization. Configure the relevant localhost and production domains in Firebase and Supabase consoles.
+
+## Features and routes
+
+### Public and client experience
+
+| Route | Purpose |
+|---|---|
+| `/` | Landing page and entry points for clients and businesses. |
+| `/for-clients`, `/for-business` | Information pages for each audience. |
+| `/search?q=...&category=...` | Search public businesses and services. |
+| `/b/:slug` | Business profile, services, policies, and booking entry point. |
+| `/b/:slug/book` | Service/class selection (including a class selected by the `class` query parameter), staff and time selection, deposit and policy details, booking review, and checkout. |
+| `/signin` | Client phone sign-in. |
+| `/my` | Upcoming and past client bookings. |
+| `/my/bookings/:id` | Booking details, ticket/check-in code, cancellation, review, and available booking actions. |
+| `/my/bookings/:id/checkout` | Continue payment through the checkout link. |
+| `/my/bookings/:id/move` | Move a booking to an available time. |
+| `/my/waitlist` | View or leave waitlists and respond to offers. |
+| `/my/profile` | Client profile, reminders, sign-out, and account deletion. |
+| `/assistant` | Client assistant. |
+
+### Business-owner experience
+
+| Route | Purpose |
+|---|---|
+| `/business/signin` | Owner email sign-in. |
+| `/business` | Business workspace and daily overview. |
+| `/business/start` | Guided business onboarding. |
+| `/business/setup` | Setup checklist, policy review, and go-live actions. |
+| `/business/bookings` | Manage bookings. |
+| `/business/check-in` | Check in clients. |
+| `/business/approvals` | Review requests that need owner approval. |
+| `/business/sessions` | Manage class sessions. |
+| `/business/reviews` | View business reviews. |
+| `/business/settings/profile` | Business profile. |
+| `/business/settings/services` | Services and extras. |
+| `/business/settings/team` | Staff and team setup. |
+| `/business/settings/policy` | Booking and cancellation policies. |
+| `/business/settings/photos` | Business photos. |
+| `/business/settings/location` | Business location. |
+| `/business/settings/tax` | Tax details. |
+| `/business/settings/paypal` | PayPal connection and payment settings. |
+| `/business/settings/plan` | Subscription plan settings. |
+
+Private client and owner routes redirect to the appropriate sign-in page and return the user to the requested internal route after sign-in. These frontend guards improve the flow but are not an authorization boundary; the backend checks permissions on every protected request.
+
+## Authentication and API
+
+- Clients sign in with Firebase phone authentication.
+- Business owners sign in with Supabase email and password.
+- `lib/core/auth/` contains the shared auth service.
+- `lib/core/api/` contains the API client and API error handling. Authenticated requests include the signed-in user's token.
+- The backend verifies Firebase and Supabase tokens and applies access controls.
+
+Do not add service-role keys, database URLs, PayPal secrets, encryption keys, or other server credentials to this app. Anything supplied using `--dart-define` is bundled into the client and can be inspected by users.
+
+## Code layout
+
+```text
+lib/
+  main.dart                 Flutter setup, URL strategy, services, locale and app start
+  app/
+    app.dart                Top-level app widget
+    router.dart             Route table and sign-in redirects
+    theme.dart              Theme
+    tokens.dart             Reusable colors, spacing, and typography tokens
+  core/
+    api/                    HTTP client and readable backend errors
+    auth/                   Firebase and Supabase sign-in state
+    config.dart             Compile-time, non-secret client configuration
+    format/                 Money and business-time-zone formatting
+    i18n/                   Locale loading and language selection
+  features/
+    account/                Client bookings, profile, booking details, waitlists
+    assistant/              Client assistant
+    auth/                   Client and owner sign-in pages
+    booking/                Booking selection, checkout, and waitlist flow
+    business/               Public business profile
+    day/                    Owner bookings, check-in, approvals, classes, reviews
+    home/                   Landing and audience information
+    onboarding/             Business setup and launch checklist
+    owner/                  Owner workspace
+    planned/                Informational pages for planned features
+    search/                 Business discovery
+    settings/               Owner business and account settings
+  shared/                   Reusable UI, shells, layout, and status widgets
+assets/
+  fonts/                    Bundled Figtree and Bricolage Grotesque fonts
+  i18n/                     English source and translated JSON strings
+test/                       Flutter unit and widget tests
+web/                        Browser entry point, icons, and install manifest
+```
+
+## UI conventions
+
+- Shared design tokens and theme live in `lib/app/tokens.dart` and `lib/app/theme.dart`.
+- Figtree and Bricolage Grotesque are bundled under `assets/fonts`; the app does not fetch fonts from Google at runtime.
+- Booking money and payment states are displayed as returned by the backend; the frontend must not recalculate business prices or booking rules.
+- Appointment times should be displayed in the business's configured time zone.
+- Respect reduced-motion preferences and provide useful loading, empty, and error states.
+
+## Languages and translations
+
+Interface strings are in `assets/i18n/{language}.json`. English (`en.json`) is the source and fallback. Current locale files are Arabic, Bengali, English, Spanish, French, Gujarati, Hindi, Indonesian, Kannada, Malayalam, Marathi, Punjabi, Portuguese, Tamil, Telugu, and Urdu.
+
+Language selection follows the device locale where supported, can be changed in the app, and is remembered. Arabic and Urdu use right-to-left layout. Translation files marked `_review` are drafts and must be reviewed by a fluent speaker before release, particularly text about payments, deposits, cancellations, and refunds.
+
+The optional `tool/translate_i18n.py` script drafts missing translations with the OpenAI API. It needs the Python `openai` package and `OPENAI_API_KEY`; do not commit the key. It only fills missing strings, validates placeholders, and marks generated files for human review.
+
+## Test and analyze
+
+Run from `frontend`:
+
+```powershell
 flutter analyze
 flutter test
 ```
 
-**Production build:** the same `--dart-define` values with `flutter build web --release`.
+Tests cover account and booking data, API errors, booking URL state, money/time formatting, hold-ticket UI, and localization consistency. Add or update tests when changing route behavior, data formatting, API error handling, or localization.
 
-## What works now (F1 to F4)
+## Build and deploy
 
-| Page | Address | Live data |
-|---|---|---|
-| Home | `/` | Search box and category picks; an example hold ticket |
-| Search | `/search?q=barber&category=barber` | `GET /api/public/search` |
-| Business page | `/b/{slug}` | `GET /api/public/businesses/{slug}`: photos, services, extras, deposits, cancellation rules |
-| Client sign-in | `/signin` | Supabase phone code |
-| Owner sign-in / create account | `/business/signin` | Supabase email and password |
-| Owner "Today" | `/business` | `GET /api/owner/businesses` and the daily briefing |
-| **Booking flow** | `/b/{slug}/book` | Services and extras, deposit notice, times (by day, part of day and staff), review, PayPal |
-| Class booking | `/b/{slug}/book?class={id}` | Sessions with seats left, review, PayPal |
-| Checkout and confirmation | `/my/bookings/{id}/checkout` | Opens PayPal in a new tab and waits for the hold |
-| Waitlist | from the time step | "Tell me if a time opens" |
-| **My bookings** | `/my` | Coming up and past, waitlist offers banner |
-| Booking details | `/my/bookings/{id}` | Ticket, QR check-in code, move, cancel (cost first), review, receipts |
-| Move a booking | `/my/bookings/{id}/move` | Only times it can really move to |
-| Waitlist | `/my/waitlist` | Offers to book a freed time, leave the list |
-| Profile | `/my/profile` | Name, email for reminders (with code), sign out, delete my data |
-| **Set up with AI** | `/business/start` | Describe, quick questions, editable draft, save |
-| Setup checklist | `/business/setup` | Confirm the policy (rules-engine preview), what's left, go live, booking link |
+Build the static web app with production configuration:
 
-## Sign-in
-
-* **Clients:** Firebase phone codes. Set the five `FIREBASE_*` values (see `lib/core/config.dart`).
-* **Business owners:** Supabase email and password (`SUPABASE_URL`, `SUPABASE_ANON_KEY`).
-* The backend accepts both (see `backend_changes/`).
-
-Every other address from the plan already exists and explains what it will do and in which step it arrives,
-so the app can be clicked through end to end.
-
-**Sign-in guards:** `/my...` and `/assistant` send people to phone sign-in; `/business...` sends them to
-owner sign-in. After signing in they return to the page they wanted.
-
-## How the code is organised
-
-```
-lib/
-├── main.dart                 start-up: clean URLs, time zones, Supabase
-├── app/                      tokens.dart (colours, spacing, type), theme.dart, router.dart, app.dart
-├── core/
-│   ├── config.dart           --dart-define settings
-│   ├── api/                  ApiClient (adds the sign-in token) and ApiException (readable errors)
-│   ├── auth/                 AuthService: phone codes, email sign-in, sign-out
-│   └── format/               money (never recalculated) and times (always in the business's time zone)
-├── shared/                   shells, hold ticket, money states, layout, loading/error/empty states, brand
-└── features/                 home, auth, search, business, owner, planned
+```powershell
+flutter build web --release --dart-define=API_BASE_URL=https://YOUR_API_HOST --dart-define=SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co --dart-define=SUPABASE_ANON_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY --dart-define=FIREBASE_API_KEY=YOUR_FIREBASE_WEB_API_KEY --dart-define=FIREBASE_AUTH_DOMAIN=YOUR_PROJECT.firebaseapp.com --dart-define=FIREBASE_PROJECT_ID=YOUR_FIREBASE_PROJECT_ID --dart-define=FIREBASE_APP_ID=YOUR_FIREBASE_WEB_APP_ID --dart-define=FIREBASE_MESSAGING_SENDER_ID=YOUR_FIREBASE_SENDER_ID
 ```
 
-## Design system
+This writes the site to `build/web`. The Firebase Hosting configuration in `firebase.json` publishes that directory, routes unknown paths to `index.html` for client-side navigation, caches static assets, and avoids caching the entry page.
 
-* **Colours** (`app/tokens.dart`): ink, forest, paper, sage, line, plus one fixed colour per money state:
-  held (blue), waiting for approval (amber), charged (ink), released (green), problem (red).
-* **Type:** Bricolage Grotesque for headlines and amounts, Figtree for reading. Both are bundled in
-  `assets/fonts` under the SIL Open Font License, so the app makes no requests to Google and text never jumps.
-* **The hold ticket** (`shared/hold_ticket.dart`) is the signature element: what's booked above the tear line,
-  the money and the cancellation timeline below it.
-* **Rules the code follows:** money is shown exactly as the backend sends it; times are shown in the
-  business's time zone; backend error messages are shown as written (they're written for people);
-  motion respects "reduce motion".
+After authenticating/configuring the Firebase CLI for the intended project, deploy from this directory:
 
-## Languages
+```powershell
+# If no Firebase project is selected, choose one first:
+firebase use --add
 
-* Every sentence on screen comes from `assets/i18n/{language}.json`; English (`en.json`) is the source and the fallback.
-* The language is taken from the device, can be changed with the globe button, and is remembered.
-* Arabic and Urdu are shown right to left automatically.
-* `hi.json` (Hindi) is a draft. Draft the other languages with `python tool/translate_i18n.py` (needs `OPENAI_API_KEY`).
-  Every file says `_review`: **a fluent speaker must check each language before release**, especially lines about money.
-* Screens converted so far: header and menus, home, "I want to book", "I own a business", both sign-in pages.
+firebase deploy --only hosting
+```
+
+Before release, verify the production API URL, backend CORS origin, Firebase authorized domains, Supabase redirect/site URLs, and that no server-only credentials were included in the build.

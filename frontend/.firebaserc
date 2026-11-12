@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "flutter build web --release": "rebookly-9e7dc"
+  },
+  "targets": {},
+  "etags": {}
+}

@@ -4,7 +4,7 @@
 /// Nothing secret lives here: the Supabase publishable key and the Firebase web config are designed to be
 /// public (every browser receives them), and the backend checks every request.
 abstract final class AppConfig {
-  static const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://localhost:8000');
+    static const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'https://rebookly-vlee.onrender.com');
 
   // Supabase: business owners sign in with email and password.
   static const supabaseUrl = String.fromEnvironment(

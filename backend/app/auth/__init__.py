@@ -1,1 +1,0 @@
-from app.models.photo import BusinessPhoto  # noqa: F401

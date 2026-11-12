@@ -134,6 +134,9 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_payments_booking_id'), 'payments', ['booking_id'], unique=False)
     # ### end Alembic commands ###
+       # Block Supabase's public API from these tables. Only our backend may access them.
+    for table in ("clients", "slots", "bookings", "payments", "alembic_version"):
+        op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
 
 
 def downgrade() -> None:
