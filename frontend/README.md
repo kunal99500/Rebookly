@@ -31,7 +31,7 @@ To disable authentication integrations for a local UI run, explicitly pass empty
 | `API_BASE_URL` | Rebookly backend base URL. Use `http://localhost:8000` locally and the deployed HTTPS API URL for a production build. |
 | `SUPABASE_URL` | Supabase project URL for business-owner email sign-in. |
 | `SUPABASE_ANON_KEY` | Supabase publishable/anon key for the client app. This is intentionally client-visible; never use the service-role key. |
-| `FIREBASE_API_KEY` | Firebase web-app API key for client phone sign-in. |
+| `FIREBASE_API_KEY` | Firebase web-app API key for client phone sign-in and anonymous guest booking. |
 | `FIREBASE_AUTH_DOMAIN` | Firebase web app auth domain. |
 | `FIREBASE_PROJECT_ID` | Firebase project ID. |
 | `FIREBASE_APP_ID` | Firebase web-app ID. |
@@ -49,8 +49,9 @@ Firebase web configuration and Supabase publishable keys are public client confi
 | `/for-clients`, `/for-business` | Information pages for each audience. |
 | `/search?q=...&category=...` | Search public businesses and services. |
 | `/b/:slug` | Business profile, services, policies, and booking entry point. |
-| `/b/:slug/book` | Service/class selection (including a class selected by the `class` query parameter), staff and time selection, deposit and policy details, booking review, and checkout. |
+| `/b/:slug/book` | Service/class selection (including a class selected by the `class` query parameter), staff and time selection, deposit and policy details, contact name/email, and checkout. |
 | `/signin` | Client phone sign-in. |
+| `/checkout/:bookingId` | Complete guest or signed-in client payment and see the booking confirmation. |
 | `/my` | Upcoming and past client bookings. |
 | `/my/bookings/:id` | Booking details, ticket/check-in code, cancellation, review, and available booking actions. |
 | `/my/bookings/:id/checkout` | Continue payment through the checkout link. |
@@ -82,11 +83,11 @@ Firebase web configuration and Supabase publishable keys are public client confi
 | `/business/settings/paypal` | PayPal connection and payment settings. |
 | `/business/settings/plan` | Subscription plan settings. |
 
-Private client and owner routes redirect to the appropriate sign-in page and return the user to the requested internal route after sign-in. These frontend guards improve the flow but are not an authorization boundary; the backend checks permissions on every protected request.
+Private client and owner routes redirect to the appropriate sign-in page and return the user to the requested internal route after sign-in. Clients can browse and book without creating an account; booking uses Firebase Anonymous Authentication and asks for a contact name and email at checkout. These frontend guards improve the flow but are not an authorization boundary; the backend checks permissions on every protected request.
 
 ## Authentication and API
 
-- Clients sign in with Firebase phone authentication.
+- Clients can book as guests with Firebase Anonymous Authentication; phone sign-in remains available for account features.
 - Business owners sign in with Supabase email and password.
 - `lib/core/auth/` contains the shared auth service.
 - `lib/core/api/` contains the API client and API error handling. Authenticated requests include the signed-in user's token.

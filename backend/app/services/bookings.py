@@ -92,7 +92,7 @@ async def create_booking(session: AsyncSession, client: Client, data: BookingCre
     booking = Booking(
         id=uuid.uuid4(),
         business_id=business.id, service_id=plan.lines[0].service_id, slot_id=None,
-        location_id=chosen.location_id, staff_id=chosen.id, client_id=client.id,
+        location_id=chosen.location_id, staff_id=chosen.id, client_id=client.id, client_email=data.email,
         attendee_name=data.attendee_name,
         status="pending_payment",
         payment_option=data.payment_option,
@@ -186,7 +186,8 @@ async def create_class_booking(session: AsyncSession, client: Client, data: Clas
         Location.business_id == business.id, Location.is_primary.is_(True)))
     booking = Booking(
         id=uuid.uuid4(), business_id=business.id, service_id=service.id, slot_id=slot.id,
-        location_id=location_id, staff_id=None, client_id=client.id, attendee_name=data.attendee_name,
+        location_id=location_id, staff_id=None, client_id=client.id, client_email=data.email,
+        attendee_name=data.attendee_name,
         status="pending_payment", payment_option=data.payment_option, price=total, held_amount=held,
         currency=business.currency, policy_version=policy.version,
         policy_snapshot=strictest_policy(policy.rules, [service.policy_override]),

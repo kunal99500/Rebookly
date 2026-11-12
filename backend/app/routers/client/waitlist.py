@@ -66,11 +66,14 @@ async def accept(entry_id: uuid.UUID, data: AcceptOffer, request: Request,
     try:
         if entry.slot_id is not None:
             booking = await bookings.create_class_booking(
-                session, client, ClassBookingCreate(slot_id=entry.slot_id, payment_option=data.payment_option))
+                session, client, ClassBookingCreate(
+                    slot_id=entry.slot_id, payment_option=data.payment_option, name=client.name,
+                    email=client.email if client.email_verified_at else None))
         else:
             booking = await bookings.create_booking(session, client, BookingCreate(
                 service_ids=[uuid.UUID(s) for s in entry.service_ids], starts_at=entry.offered_starts_at,
-                payment_option=data.payment_option))
+                payment_option=data.payment_option, name=client.name,
+                email=client.email if client.email_verified_at else None))
     except HTTPException as err:
         if err.status_code == status.HTTP_409_CONFLICT:
             entry = await session.get(WaitlistEntry, entry_id)

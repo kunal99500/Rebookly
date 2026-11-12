@@ -8,6 +8,7 @@ import '../../core/api/api_exception.dart';
 import '../../core/auth/auth_service.dart';
 import '../../core/format/money.dart';
 import '../../core/format/time.dart';
+import '../../core/i18n/i18n.dart';
 import '../../shared/client_shell.dart';
 import '../../shared/feedback.dart';
 import '../../shared/hold_ticket.dart';
@@ -42,10 +43,14 @@ class BookingFlowScreen extends ConsumerWidget {
 
           if (state.isClass) {
             final service = known[state.classId];
-            if (service == null || !service.isClass) return _StartAgain(slug: slug);
+            if (service == null || !service.isClass) {
+              return _StartAgain(slug: slug);
+            }
             return state.slotId == null
-                ? ClassSessionsStep(business: business, service: service, state: state)
-                : ClassReviewStep(business: business, service: service, state: state);
+                ? ClassSessionsStep(
+                    business: business, service: service, state: state)
+                : ClassReviewStep(
+                    business: business, service: service, state: state);
           }
           final valid = state.serviceIds.every(known.containsKey);
           if (state.serviceIds.isEmpty || !valid || state.editing) {
@@ -56,9 +61,14 @@ class BookingFlowScreen extends ConsumerWidget {
             );
           }
           if (state.time == null) {
-            return TimeStep(key: ValueKey('${state.serviceIds.join(',')}|${state.staffFilter}'), business: business, state: state);
+            return TimeStep(
+                key: ValueKey(
+                    '${state.serviceIds.join(',')}|${state.staffFilter}'),
+                business: business,
+                state: state);
           }
-          return ReviewStep(key: ValueKey(state.time), business: business, state: state);
+          return ReviewStep(
+              key: ValueKey(state.time), business: business, state: state);
         },
       ),
     );
@@ -67,7 +77,10 @@ class BookingFlowScreen extends ConsumerWidget {
 
 String _visitName(BusinessPage business, List<String> ids) {
   final names = {for (final s in business.services) s.id: s.name};
-  return ids.map((id) => names[id] ?? '').where((n) => n.isNotEmpty).join(' + ');
+  return ids
+      .map((id) => names[id] ?? '')
+      .where((n) => n.isNotEmpty)
+      .join(' + ');
 }
 
 class _StartAgain extends StatelessWidget {
@@ -80,8 +93,11 @@ class _StartAgain extends StatelessWidget {
         EmptyState(
           icon: Icons.refresh_rounded,
           title: 'This booking link is out of date',
-          message: 'The business may have changed its services. Start again to see what’s available now.',
-          action: FilledButton(onPressed: () => context.go('/b/$slug/book'), child: const Text('Start again')),
+          message:
+              'The business may have changed its services. Start again to see what’s available now.',
+          action: FilledButton(
+              onPressed: () => context.go('/b/$slug/book'),
+              child: const Text('Start again')),
         ),
       ]);
 }
@@ -91,7 +107,8 @@ class _StartAgain extends StatelessWidget {
 // =====================================================================
 
 class ServicesStep extends StatefulWidget {
-  const ServicesStep({super.key, required this.business, required this.initial});
+  const ServicesStep(
+      {super.key, required this.business, required this.initial});
 
   final BusinessPage business;
   final List<String> initial;
@@ -103,8 +120,10 @@ class ServicesStep extends StatefulWidget {
 class _ServicesStepState extends State<ServicesStep> {
   late final Set<String> _selected = {...widget.initial};
 
-  List<ServiceItem> get _mains => widget.business.services.where((s) => !s.isAddOn && !s.isClass).toList();
-  List<ServiceItem> get _classes => widget.business.services.where((s) => s.isClass).toList();
+  List<ServiceItem> get _mains =>
+      widget.business.services.where((s) => !s.isAddOn && !s.isClass).toList();
+  List<ServiceItem> get _classes =>
+      widget.business.services.where((s) => s.isClass).toList();
   List<ServiceItem> get _extras => widget.business.addOns;
   bool get _hasMain => _mains.any((s) => _selected.contains(s.id));
 
@@ -112,7 +131,9 @@ class _ServicesStepState extends State<ServicesStep> {
     setState(() {
       if (_selected.remove(service.id)) {
         // Extras need a main service: if none is left, untick the extras too.
-        if (!service.isAddOn && !_hasMain) _selected.removeAll(_extras.map((s) => s.id));
+        if (!service.isAddOn && !_hasMain) {
+          _selected.removeAll(_extras.map((s) => s.id));
+        }
       } else {
         _selected.add(service.id);
       }
@@ -136,20 +157,25 @@ class _ServicesStepState extends State<ServicesStep> {
     return StepFrame(
       summary: Text(
         count == 0 ? 'Choose at least one service' : '$count selected',
-        style: text.titleSmall?.copyWith(color: count == 0 ? Palette.muted : Palette.ink),
+        style: text.titleSmall
+            ?.copyWith(color: count == 0 ? Palette.muted : Palette.ink),
       ),
-      action: FilledButton(onPressed: _hasMain ? _continue : null, child: const Text('Choose a time')),
+      action: FilledButton(
+          onPressed: _hasMain ? _continue : null,
+          child: const Text('Choose a time')),
       children: [
         const StepIndicator(current: 0, labels: _stepLabels),
         Text('What would you like?', style: text.displaySmall),
         const SizedBox(height: Space.sm),
-        Text(business.name, style: text.bodyLarge?.copyWith(color: Palette.muted)),
+        Text(business.name,
+            style: text.bodyLarge?.copyWith(color: Palette.muted)),
         const SizedBox(height: Space.xl),
         if (_mains.isEmpty && _classes.isEmpty)
           const EmptyState(
             icon: Icons.content_cut_rounded,
             title: 'Nothing to book yet',
-            message: 'This business hasn’t added any services yet. Check back soon.',
+            message:
+                'This business hasn’t added any services yet. Check back soon.',
           ),
         for (final service in _mains)
           _ServiceTile(
@@ -162,7 +188,9 @@ class _ServicesStepState extends State<ServicesStep> {
           const SizedBox(height: Space.xl),
           SectionHeader(
             'Extras',
-            subtitle: _hasMain ? 'Added to the same visit.' : 'Choose a service first, then add extras to it.',
+            subtitle: _hasMain
+                ? 'Added to the same visit.'
+                : 'Choose a service first, then add extras to it.',
           ),
           for (final service in _extras)
             _ServiceTile(
@@ -175,14 +203,16 @@ class _ServicesStepState extends State<ServicesStep> {
         ],
         if (_classes.isNotEmpty) ...[
           const SizedBox(height: Space.xl),
-          const SectionHeader('Group classes', subtitle: 'Booked one session at a time.'),
+          const SectionHeader('Group classes',
+              subtitle: 'Booked one session at a time.'),
           for (final service in _classes)
             _ServiceTile(
               service: service,
               currency: business.currency,
               selected: false,
               trailingAction: 'Choose a session',
-              onTap: () => FlowState.forClass(service.id).go(context, business.slug),
+              onTap: () =>
+                  FlowState.forClass(service.id).go(context, business.slug),
             ),
         ],
       ],
@@ -205,7 +235,7 @@ class _ServiceTile extends StatelessWidget {
   final bool selected;
   final bool enabled;
   final VoidCallback onTap;
-  final String? trailingAction;   // for classes: a link instead of a tick
+  final String? trailingAction; // for classes: a link instead of a tick
 
   @override
   Widget build(BuildContext context) {
@@ -213,7 +243,8 @@ class _ServiceTile extends StatelessWidget {
     final deposit = num.tryParse(service.deposit) ?? 0;
     final facts = [
       formatDuration(service.durationMinutes),
-      if (!service.isAddOn && deposit > 0) '${formatMoney(service.deposit, currency)} kept aside to book',
+      if (!service.isAddOn && deposit > 0)
+        '${formatMoney(service.deposit, currency)} kept aside to book',
     ].join(', ');
 
     return Padding(
@@ -235,42 +266,60 @@ class _ServiceTile extends StatelessWidget {
                 padding: const EdgeInsets.all(Space.lg),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(Radii.card),
-                  border: Border.all(color: selected ? Palette.forest : Palette.line, width: selected ? 1.6 : 1),
+                  border: Border.all(
+                      color: selected ? Palette.forest : Palette.line,
+                      width: selected ? 1.6 : 1),
                 ),
-                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  if (trailingAction == null) ...[
-                    Padding(
-                      padding: const EdgeInsets.only(top: 1),
-                      child: Icon(
-                        selected ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-                        color: selected ? Palette.forest : Palette.faint,
-                      ),
-                    ),
-                    const SizedBox(width: Space.md),
-                  ],
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(service.name, style: text.titleMedium),
-                      const SizedBox(height: 2),
-                      Text(facts, style: text.bodySmall),
-                      if (service.description != null && service.description!.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(service.description!, style: text.bodyMedium?.copyWith(color: Palette.muted)),
+                child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (trailingAction == null) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Icon(
+                            selected
+                                ? Icons.check_circle_rounded
+                                : Icons.radio_button_unchecked_rounded,
+                            color: selected ? Palette.forest : Palette.faint,
+                          ),
+                        ),
+                        const SizedBox(width: Space.md),
                       ],
+                      Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(service.name, style: text.titleMedium),
+                              const SizedBox(height: 2),
+                              Text(facts, style: text.bodySmall),
+                              if (service.description != null &&
+                                  service.description!.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Text(service.description!,
+                                    style: text.bodyMedium
+                                        ?.copyWith(color: Palette.muted)),
+                              ],
+                            ]),
+                      ),
+                      const SizedBox(width: Space.md),
+                      Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              service.isAddOn
+                                  ? '+${formatMoney(service.price, currency)}'
+                                  : formatMoney(service.price, currency),
+                              style: text.titleMedium
+                                  ?.copyWith(fontFeatures: Fonts.tabular),
+                            ),
+                            if (trailingAction != null) ...[
+                              const SizedBox(height: Space.sm),
+                              Text(trailingAction!,
+                                  style: text.labelMedium
+                                      ?.copyWith(color: Palette.forest)),
+                            ],
+                          ]),
                     ]),
-                  ),
-                  const SizedBox(width: Space.md),
-                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Text(
-                      service.isAddOn ? '+${formatMoney(service.price, currency)}' : formatMoney(service.price, currency),
-                      style: text.titleMedium?.copyWith(fontFeatures: Fonts.tabular),
-                    ),
-                    if (trailingAction != null) ...[
-                      const SizedBox(height: Space.sm),
-                      Text(trailingAction!, style: text.labelMedium?.copyWith(color: Palette.forest)),
-                    ],
-                  ]),
-                ]),
               ),
             ),
           ),
@@ -298,8 +347,11 @@ class _TimeStepState extends ConsumerState<TimeStep> {
   bool _noticeHandled = false;
   String? _day;
 
-  AvailabilityKey get _key =>
-      (slug: widget.business.slug, serviceIds: widget.state.serviceIds.join(','), staffId: widget.state.staffFilter);
+  AvailabilityKey get _key => (
+        slug: widget.business.slug,
+        serviceIds: widget.state.serviceIds.join(','),
+        staffId: widget.state.staffFilter
+      );
 
   void _maybeShowNotice(Availability availability) {
     if (_noticeHandled || !availability.showNoticeBeforeTimes) return;
@@ -307,7 +359,9 @@ class _TimeStepState extends ConsumerState<TimeStep> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final ok = await showDepositNotice(context, availability.notice);
-      if (!ok && mounted) widget.state.editServices().go(context, widget.business.slug);
+      if (!ok && mounted) {
+        widget.state.editServices().go(context, widget.business.slug);
+      }
     });
   }
 
@@ -341,7 +395,8 @@ class _TimeStepState extends ConsumerState<TimeStep> {
         ),
         Text('Pick a time', style: text.displaySmall),
         const SizedBox(height: Space.sm),
-        Text('Only times that are really free are shown, in ${business.name}’s local time.',
+        Text(
+            'Only times that are really free are shown, in ${business.name}’s local time.',
             style: text.bodyLarge?.copyWith(color: Palette.muted)),
         const SizedBox(height: Space.xl),
         AsyncView<Availability>(
@@ -349,36 +404,51 @@ class _TimeStepState extends ConsumerState<TimeStep> {
           onRetry: () => ref.invalidate(availabilityProvider(_key)),
           data: (availability) {
             _maybeShowNotice(availability);
-            return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (availability.staffChoices.length > 1) ...[
-                _StaffPicker(choices: availability.staffChoices, state: widget.state, slug: business.slug),
-                const SizedBox(height: Space.xl),
-              ],
-              if (availability.times.isEmpty)
-                EmptyState(
-                  icon: Icons.event_busy_outlined,
-                  title: 'No free times in the next few days',
-                  message: widget.state.staffFilter != null
-                      ? 'Try “Anyone”, or ask to be told when a time opens.'
-                      : 'Ask to be told when a time opens. If someone cancels, you’ll hear first.',
-                  action: FilledButton.icon(
-                    onPressed: () => showWaitlistSheet(context, ref, business: business, serviceIds: widget.state.serviceIds),
-                    icon: const Icon(Icons.notifications_active_outlined, size: 20),
-                    label: const Text('Tell me if a time opens'),
-                  ),
-                )
-              else
-                _TimeGrid(
-                  times: availability.times,
-                  timezone: business.timezone,
-                  selectedDay: _day,
-                  onDay: (day) => setState(() => _day = day),
-                  onTime: (slot) => widget.state
-                      .withTime(slot.raw, widget.state.staffFilter ?? (slot.staff.isEmpty ? null : slot.staff.first.id))
-                      .go(context, business.slug),
-                  onWaitlist: () => showWaitlistSheet(context, ref, business: business, serviceIds: widget.state.serviceIds),
-                ),
-            ]);
+            return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (availability.staffChoices.length > 1) ...[
+                    _StaffPicker(
+                        choices: availability.staffChoices,
+                        state: widget.state,
+                        slug: business.slug),
+                    const SizedBox(height: Space.xl),
+                  ],
+                  if (availability.times.isEmpty)
+                    EmptyState(
+                      icon: Icons.event_busy_outlined,
+                      title: 'No free times in the next few days',
+                      message: widget.state.staffFilter != null
+                          ? 'Try “Anyone”, or ask to be told when a time opens.'
+                          : 'Ask to be told when a time opens. If someone cancels, you’ll hear first.',
+                      action: FilledButton.icon(
+                        onPressed: () => showWaitlistSheet(context, ref,
+                            business: business,
+                            serviceIds: widget.state.serviceIds),
+                        icon: const Icon(Icons.notifications_active_outlined,
+                            size: 20),
+                        label: const Text('Tell me if a time opens'),
+                      ),
+                    )
+                  else
+                    _TimeGrid(
+                      times: availability.times,
+                      timezone: business.timezone,
+                      selectedDay: _day,
+                      onDay: (day) => setState(() => _day = day),
+                      onTime: (slot) => widget.state
+                          .withTime(
+                              slot.raw,
+                              widget.state.staffFilter ??
+                                  (slot.staff.isEmpty
+                                      ? null
+                                      : slot.staff.first.id))
+                          .go(context, business.slug),
+                      onWaitlist: () => showWaitlistSheet(context, ref,
+                          business: business,
+                          serviceIds: widget.state.serviceIds),
+                    ),
+                ]);
           },
         ),
       ],
@@ -387,7 +457,8 @@ class _TimeStepState extends ConsumerState<TimeStep> {
 }
 
 class _StaffPicker extends StatelessWidget {
-  const _StaffPicker({required this.choices, required this.state, required this.slug});
+  const _StaffPicker(
+      {required this.choices, required this.state, required this.slug});
 
   final List<StaffChoice> choices;
   final FlowState state;
@@ -411,7 +482,8 @@ class _StaffPicker extends StatelessWidget {
             label: Text(person.name),
             selected: state.staffFilter == person.id,
             showCheckmark: false,
-            onSelected: (_) => state.withStaffFilter(person.id).go(context, slug),
+            onSelected: (_) =>
+                state.withStaffFilter(person.id).go(context, slug),
           ),
       ]),
     ]);
@@ -442,7 +514,10 @@ class _TimeGrid extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final byDay = <String, List<TimeSlot>>{};
     for (final slot in times) {
-      byDay.putIfAbsent(_dayKey.format(inZone(slot.startsAt, timezone)), () => []).add(slot);
+      byDay
+          .putIfAbsent(
+              _dayKey.format(inZone(slot.startsAt, timezone)), () => [])
+          .add(slot);
     }
     final days = byDay.keys.toList()..sort();
     final day = days.contains(selectedDay) ? selectedDay! : days.first;
@@ -456,10 +531,15 @@ class _TimeGrid extends StatelessWidget {
       return DateFormat('EEE d MMM').format(DateTime.parse(key));
     }
 
-    final parts = <String, List<TimeSlot>>{'Morning': [], 'Afternoon': [], 'Evening': []};
+    final parts = <String, List<TimeSlot>>{
+      'Morning': [],
+      'Afternoon': [],
+      'Evening': []
+    };
     for (final slot in byDay[day]!) {
       final hour = inZone(slot.startsAt, timezone).hour;
-      parts[hour < 12 ? 'Morning' : (hour < 17 ? 'Afternoon' : 'Evening')]!.add(slot);
+      parts[hour < 12 ? 'Morning' : (hour < 17 ? 'Afternoon' : 'Evening')]!
+          .add(slot);
     }
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -481,10 +561,14 @@ class _TimeGrid extends StatelessWidget {
       const SizedBox(height: Space.xl),
       for (final part in parts.entries)
         if (part.value.isNotEmpty) ...[
-          Text(part.key, style: text.titleSmall?.copyWith(color: Palette.muted)),
+          Text(part.key,
+              style: text.titleSmall?.copyWith(color: Palette.muted)),
           const SizedBox(height: Space.sm),
           Wrap(spacing: Space.sm, runSpacing: Space.sm, children: [
-            for (final slot in part.value) _TimeChip(label: formatTime(slot.startsAt, timezone), onTap: () => onTime(slot)),
+            for (final slot in part.value)
+              _TimeChip(
+                  label: formatTime(slot.startsAt, timezone),
+                  onTap: () => onTime(slot)),
           ]),
           const SizedBox(height: Space.xl),
         ],
@@ -512,7 +596,10 @@ class _TimeChip extends StatelessWidget {
             minimumSize: const Size(0, 48),
             padding: EdgeInsets.zero,
             backgroundColor: Palette.surface,
-            textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(fontFeatures: Fonts.tabular),
+            textStyle: Theme.of(context)
+                .textTheme
+                .labelLarge
+                ?.copyWith(fontFeatures: Fonts.tabular),
           ),
           child: Text(label),
         ),
@@ -534,47 +621,51 @@ class ReviewStep extends ConsumerStatefulWidget {
 }
 
 class _ReviewStepState extends ConsumerState<ReviewStep> {
+  final _contactForm = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _email = TextEditingController();
   final _attendee = TextEditingController();
   bool _forSomeoneElse = false;
   bool _busy = false;
   ApiException? _problem;
+  String? _authProblem;
 
   @override
   void dispose() {
+    _name.dispose();
+    _email.dispose();
     _attendee.dispose();
     super.dispose();
   }
 
-  AvailabilityKey get _key =>
-      (slug: widget.business.slug, serviceIds: widget.state.serviceIds.join(','), staffId: widget.state.staffFilter);
+  AvailabilityKey get _key => (
+        slug: widget.business.slug,
+        serviceIds: widget.state.serviceIds.join(','),
+        staffId: widget.state.staffFilter
+      );
 
   Future<void> _pay(String option) async {
-    final auth = ref.read(authServiceProvider);
-    if (!auth.isClientSignedIn) {
-      final here = GoRouterState.of(context).uri.toString();
-      context.go(Uri(path: '/signin', queryParameters: {'from': here}).toString());
-      return;
-    }
+    if (!(_contactForm.currentState?.validate() ?? false)) return;
     setState(() {
       _busy = true;
       _problem = null;
+      _authProblem = null;
     });
     try {
+      await ref.read(authServiceProvider).ensureGuestSession();
       final api = ref.read(bookingApiProvider);
-      if (!await api.hasProfile()) {
-        if (!mounted) return;
-        final name = await askForName(context);
-        if (name == null) return;
-        await api.saveName(name);
-      }
       final started = await api.startAppointment(
         serviceIds: widget.state.serviceIds,
         startsAt: widget.state.time!,
         staffId: widget.state.staffId,
         paymentOption: option,
+        name: _name.text.trim(),
+        email: _email.text.trim(),
         attendeeName: _forSomeoneElse ? _attendee.text.trim() : null,
       );
       if (mounted) goToCheckout(context, widget.business.slug, started);
+    } on AuthFailure catch (failure) {
+      if (mounted) setState(() => _authProblem = failure.message);
     } on ApiException catch (problem) {
       if (mounted) setState(() => _problem = problem);
     } finally {
@@ -601,9 +692,11 @@ class _ReviewStepState extends ConsumerState<ReviewStep> {
             EmptyState(
               icon: Icons.event_busy_outlined,
               title: 'That time was just taken',
-              message: 'Someone else booked it a moment ago. Pick another time; your services are still chosen.',
+              message:
+                  'Someone else booked it a moment ago. Pick another time; your services are still chosen.',
               action: FilledButton(
-                onPressed: () => widget.state.backToTimes().go(context, business.slug),
+                onPressed: () =>
+                    widget.state.backToTimes().go(context, business.slug),
                 child: const Text('Pick another time'),
               ),
             ),
@@ -614,27 +707,41 @@ class _ReviewStepState extends ConsumerState<ReviewStep> {
     );
   }
 
-  Widget _review(BuildContext context, Availability availability, TimeSlot slot) {
+  Widget _review(
+      BuildContext context, Availability availability, TimeSlot slot) {
     final text = Theme.of(context).textTheme;
     final business = widget.business;
     final state = widget.state;
-    final option = state.pay ?? (availability.offersDeposit ? 'deposit_held' : 'full_held');
+    final option = state.pay ??
+        (availability.offersDeposit ? 'deposit_held' : 'full_held');
     final deposit = option == 'deposit_held';
     final notice = availability.notice;
-    final held = deposit && notice.lines.isNotEmpty ? notice.lines.first.amount : formatMoney(availability.totalPrice, availability.currency);
-    final payLater = deposit && notice.lines.length > 1 ? notice.lines[1].amount : null;
+    final held = deposit && notice.lines.isNotEmpty
+        ? notice.lines.first.amount
+        : formatMoney(availability.totalPrice, availability.currency);
+    final payLater =
+        deposit && notice.lines.length > 1 ? notice.lines[1].amount : null;
     final staff = [...slot.staff, ...availability.staffChoices];
-    final staffName = staff.where((p) => p.id == state.staffId).map((p) => p.name).firstOrNull;
+    final staffName = staff
+        .where((p) => p.id == state.staffId)
+        .map((p) => p.name)
+        .firstOrNull;
 
     return StepFrame(
       summary: Text(
-        _busy ? 'Getting PayPal ready…' : 'Nothing is taken now. You finish on PayPal.',
+        _busy
+            ? 'Getting PayPal ready…'
+            : 'Nothing is taken now. You finish on PayPal.',
         style: text.bodySmall,
       ),
       action: FilledButton(
         onPressed: _busy ? null : () => _pay(option),
         child: _busy
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2.2, color: Colors.white))
             : Text('Hold $held with PayPal'),
       ),
       children: [
@@ -648,7 +755,9 @@ class _ReviewStepState extends ConsumerState<ReviewStep> {
         Text('Check and hold your spot', style: text.displaySmall),
         const SizedBox(height: Space.xl),
         DecoratedBox(
-          decoration: BoxDecoration(color: Palette.sage, borderRadius: BorderRadius.circular(Radii.sheet)),
+          decoration: BoxDecoration(
+              color: Palette.sage,
+              borderRadius: BorderRadius.circular(Radii.sheet)),
           child: Padding(
             padding: const EdgeInsets.all(Space.lg),
             child: HoldTicket(
@@ -661,13 +770,20 @@ class _ReviewStepState extends ConsumerState<ReviewStep> {
               heldCaption: 'kept aside, not taken',
               payLater: payLater,
               payLaterCaption: 'you pay when you come',
-              rules: (deposit ? notice.policy : business.policyLines).map(TicketRule.fromNotice).toList(),
-              footnote: notice.ownerNote == null ? null : '“${notice.ownerNote}”, ${business.name}',
+              rules: (deposit ? notice.policy : business.policyLines)
+                  .map(TicketRule.fromNotice)
+                  .toList(),
+              footnote: notice.ownerNote == null
+                  ? null
+                  : '“${notice.ownerNote}”, ${business.name}',
             ),
           ),
         ),
         const SizedBox(height: Space.xl),
-        _TotalRow(label: 'Total for the visit', amount: formatMoney(availability.totalPrice, availability.currency)),
+        _TotalRow(
+            label: 'Total for the visit',
+            amount:
+                formatMoney(availability.totalPrice, availability.currency)),
         if (availability.taxLabel != null)
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -686,19 +802,65 @@ class _ReviewStepState extends ConsumerState<ReviewStep> {
                 ? '${notice.lines.first.amount} now, the rest when you come'
                 : 'A smaller amount now, the rest when you come',
             selected: deposit,
-            onTap: () => state.withPay('deposit_held').go(context, business.slug),
+            onTap: () =>
+                state.withPay('deposit_held').go(context, business.slug),
           ),
           _PayOption(
             title: 'Keep the full amount aside',
-            subtitle: '${formatMoney(availability.totalPrice, availability.currency)} now, nothing to pay when you come',
+            subtitle:
+                '${formatMoney(availability.totalPrice, availability.currency)} now, nothing to pay when you come',
             selected: !deposit,
             onTap: () => state.withPay('full_held').go(context, business.slug),
           ),
         ],
         const SizedBox(height: Space.lg),
+        Form(
+          key: _contactForm,
+          child: Column(children: [
+            TextFormField(
+              controller: _name,
+              maxLength: 80,
+              textCapitalization: TextCapitalization.words,
+              textInputAction: TextInputAction.next,
+              decoration: InputDecoration(
+                  labelText: context.tr('booking.contact.name'),
+                  counterText: ''),
+              validator: (value) => value == null || value.trim().isEmpty
+                  ? context.tr('booking.contact.name_required')
+                  : null,
+            ),
+            const SizedBox(height: Space.md),
+            TextFormField(
+              controller: _email,
+              keyboardType: TextInputType.emailAddress,
+              autofillHints: const [AutofillHints.email],
+              textInputAction: TextInputAction.done,
+              decoration: InputDecoration(
+                  labelText: context.tr('booking.contact.email')),
+              validator: (value) {
+                final email = value?.trim() ?? '';
+                return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)
+                    ? null
+                    : context.tr('booking.contact.email_invalid');
+              },
+            ),
+            const SizedBox(height: Space.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(context.tr('booking.contact.email_delivery'),
+                  style: text.bodySmall?.copyWith(color: Palette.muted)),
+            ),
+          ]),
+        ),
+        if (_authProblem != null) ...[
+          const SizedBox(height: Space.md),
+          Text(_authProblem!,
+              style: text.bodySmall?.copyWith(color: Palette.muted)),
+        ],
         CheckboxListTile(
           value: _forSomeoneElse,
-          onChanged: (value) => setState(() => _forSomeoneElse = value ?? false),
+          onChanged: (value) =>
+              setState(() => _forSomeoneElse = value ?? false),
           contentPadding: EdgeInsets.zero,
           controlAffinity: ListTileControlAffinity.leading,
           title: Text('I’m booking for someone else', style: text.bodyLarge),
@@ -708,7 +870,8 @@ class _ReviewStepState extends ConsumerState<ReviewStep> {
             controller: _attendee,
             maxLength: 80,
             textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(labelText: 'Their name', counterText: ''),
+            decoration:
+                const InputDecoration(labelText: 'Their name', counterText: ''),
           ),
         if (_problem != null) ...[
           const SizedBox(height: Space.lg),
@@ -738,13 +901,18 @@ class _TotalRow extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     return Row(children: [
       Expanded(child: Text(label, style: text.titleMedium)),
-      Text(amount, style: text.headlineSmall?.copyWith(fontFeatures: Fonts.tabular)),
+      Text(amount,
+          style: text.headlineSmall?.copyWith(fontFeatures: Fonts.tabular)),
     ]);
   }
 }
 
 class _PayOption extends StatelessWidget {
-  const _PayOption({required this.title, required this.subtitle, required this.selected, required this.onTap});
+  const _PayOption(
+      {required this.title,
+      required this.subtitle,
+      required this.selected,
+      required this.onTap});
 
   final String title;
   final String subtitle;
@@ -769,19 +937,25 @@ class _PayOption extends StatelessWidget {
               padding: const EdgeInsets.all(Space.lg),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(Radii.control),
-                border: Border.all(color: selected ? Palette.forest : Palette.line, width: selected ? 1.6 : 1),
+                border: Border.all(
+                    color: selected ? Palette.forest : Palette.line,
+                    width: selected ? 1.6 : 1),
               ),
               child: Row(children: [
                 Icon(
-                  selected ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+                  selected
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_unchecked_rounded,
                   color: selected ? Palette.forest : Palette.faint,
                 ),
                 const SizedBox(width: Space.md),
                 Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(title, style: text.titleSmall),
-                    Text(subtitle, style: text.bodySmall),
-                  ]),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: text.titleSmall),
+                        Text(subtitle, style: text.bodySmall),
+                      ]),
                 ),
               ]),
             ),
@@ -794,7 +968,7 @@ class _PayOption extends StatelessWidget {
 
 /// After the booking is started: off to the page that opens PayPal and waits for the hold.
 void goToCheckout(BuildContext context, String slug, BookingStarted started) {
-  context.go(Uri(path: '/my/bookings/${started.bookingId}/checkout', queryParameters: {
+  context.go(Uri(path: '/checkout/${started.bookingId}', queryParameters: {
     'pay': started.checkoutUrl,
     'until': started.paymentExpiresAt.toUtc().toIso8601String(),
     'from': slug,
@@ -806,7 +980,11 @@ void goToCheckout(BuildContext context, String slug, BookingStarted started) {
 // =====================================================================
 
 class ClassSessionsStep extends ConsumerWidget {
-  const ClassSessionsStep({super.key, required this.business, required this.service, required this.state});
+  const ClassSessionsStep(
+      {super.key,
+      required this.business,
+      required this.service,
+      required this.state});
 
   final BusinessPage business;
   final ServiceItem service;
@@ -817,10 +995,14 @@ class ClassSessionsStep extends ConsumerWidget {
     final text = Theme.of(context).textTheme;
     final key = (slug: business.slug, serviceId: service.id);
     return StepFrame(children: [
-      StepIndicator(current: 1, labels: const ['Class', 'Session', 'Review'], onTap: (_) => context.go('/b/${business.slug}/book')),
+      StepIndicator(
+          current: 1,
+          labels: const ['Class', 'Session', 'Review'],
+          onTap: (_) => context.go('/b/${business.slug}/book')),
       Text(service.name, style: text.displaySmall),
       const SizedBox(height: Space.sm),
-      Text('${formatDuration(service.durationMinutes)} group class at ${business.name}.',
+      Text(
+          '${formatDuration(service.durationMinutes)} group class at ${business.name}.',
           style: text.bodyLarge?.copyWith(color: Palette.muted)),
       const SizedBox(height: Space.xl),
       AsyncView<List<ClassSession>>(
@@ -843,7 +1025,8 @@ class ClassSessionsStep extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(Radii.card),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(Radii.card),
-                    onTap: () => state.withSlot(session.id).go(context, business.slug),
+                    onTap: () =>
+                        state.withSlot(session.id).go(context, business.slug),
                     child: Container(
                       padding: const EdgeInsets.all(Space.lg),
                       decoration: BoxDecoration(
@@ -852,20 +1035,31 @@ class ClassSessionsStep extends ConsumerWidget {
                       ),
                       child: Row(children: [
                         Expanded(
-                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(formatDay(session.startsAt, business.timezone), style: text.titleMedium),
-                            Text(
-                              '${formatTime(session.startsAt, business.timezone)} to ${formatTime(session.endsAt, business.timezone)}',
-                              style: text.bodySmall,
-                            ),
-                          ]),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                    formatDay(
+                                        session.startsAt, business.timezone),
+                                    style: text.titleMedium),
+                                Text(
+                                  '${formatTime(session.startsAt, business.timezone)} to ${formatTime(session.endsAt, business.timezone)}',
+                                  style: text.bodySmall,
+                                ),
+                              ]),
                         ),
                         Text(
-                          session.seatsLeft == 1 ? '1 seat left' : '${session.seatsLeft} seats left',
-                          style: text.labelMedium?.copyWith(color: session.seatsLeft <= 2 ? Palette.waiting : Palette.forest),
+                          session.seatsLeft == 1
+                              ? '1 seat left'
+                              : '${session.seatsLeft} seats left',
+                          style: text.labelMedium?.copyWith(
+                              color: session.seatsLeft <= 2
+                                  ? Palette.waiting
+                                  : Palette.forest),
                         ),
                         const SizedBox(width: Space.sm),
-                        const Icon(Icons.chevron_right_rounded, color: Palette.muted),
+                        const Icon(Icons.chevron_right_rounded,
+                            color: Palette.muted),
                       ]),
                     ),
                   ),
@@ -879,7 +1073,11 @@ class ClassSessionsStep extends ConsumerWidget {
 }
 
 class ClassReviewStep extends ConsumerStatefulWidget {
-  const ClassReviewStep({super.key, required this.business, required this.service, required this.state});
+  const ClassReviewStep(
+      {super.key,
+      required this.business,
+      required this.service,
+      required this.state});
 
   final BusinessPage business;
   final ServiceItem service;
@@ -890,29 +1088,39 @@ class ClassReviewStep extends ConsumerStatefulWidget {
 }
 
 class _ClassReviewStepState extends ConsumerState<ClassReviewStep> {
+  final _contactForm = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  final _email = TextEditingController();
   bool _busy = false;
   ApiException? _problem;
+  String? _authProblem;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _email.dispose();
+    super.dispose();
+  }
 
   Future<void> _pay(String option) async {
-    if (!ref.read(authServiceProvider).isClientSignedIn) {
-      final here = GoRouterState.of(context).uri.toString();
-      context.go(Uri(path: '/signin', queryParameters: {'from': here}).toString());
-      return;
-    }
+    if (!(_contactForm.currentState?.validate() ?? false)) return;
     setState(() {
       _busy = true;
       _problem = null;
+      _authProblem = null;
     });
     try {
+      await ref.read(authServiceProvider).ensureGuestSession();
       final api = ref.read(bookingApiProvider);
-      if (!await api.hasProfile()) {
-        if (!mounted) return;
-        final name = await askForName(context);
-        if (name == null) return;
-        await api.saveName(name);
-      }
-      final started = await api.startClass(slotId: widget.state.slotId!, paymentOption: option);
+      final started = await api.startClass(
+        slotId: widget.state.slotId!,
+        paymentOption: option,
+        name: _name.text.trim(),
+        email: _email.text.trim(),
+      );
       if (mounted) goToCheckout(context, widget.business.slug, started);
+    } on AuthFailure catch (failure) {
+      if (mounted) setState(() => _authProblem = failure.message);
     } on ApiException catch (problem) {
       if (mounted) setState(() => _problem = problem);
     } finally {
@@ -932,7 +1140,8 @@ class _ClassReviewStepState extends ConsumerState<ClassReviewStep> {
       page: true,
       onRetry: () => ref.invalidate(classSessionsProvider(key)),
       data: (sessions) {
-        final session = sessions.where((s) => s.id == widget.state.slotId).firstOrNull;
+        final session =
+            sessions.where((s) => s.id == widget.state.slotId).firstOrNull;
         if (session == null) {
           return StepFrame(children: [
             EmptyState(
@@ -940,24 +1149,31 @@ class _ClassReviewStepState extends ConsumerState<ClassReviewStep> {
               title: 'That session just filled up',
               message: 'Choose another session.',
               action: FilledButton(
-                onPressed: () => widget.state.backToSessions().go(context, business.slug),
+                onPressed: () =>
+                    widget.state.backToSessions().go(context, business.slug),
                 child: const Text('See other sessions'),
               ),
             ),
           ]);
         }
         final offersDeposit = service.paymentOptions.contains('deposit_held');
-        final option = widget.state.pay ?? (offersDeposit ? 'deposit_held' : 'full_held');
+        final option =
+            widget.state.pay ?? (offersDeposit ? 'deposit_held' : 'full_held');
         final held = option == 'deposit_held'
             ? formatMoney(service.deposit, business.currency)
             : formatMoney(service.price, business.currency);
 
         return StepFrame(
-          summary: Text('Nothing is taken now. You finish on PayPal.', style: text.bodySmall),
+          summary: Text('Nothing is taken now. You finish on PayPal.',
+              style: text.bodySmall),
           action: FilledButton(
             onPressed: _busy ? null : () => _pay(option),
             child: _busy
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2.2, color: Colors.white))
                 : Text('Hold $held with PayPal'),
           ),
           children: [
@@ -971,7 +1187,9 @@ class _ClassReviewStepState extends ConsumerState<ClassReviewStep> {
             Text('Check and hold your seat', style: text.displaySmall),
             const SizedBox(height: Space.xl),
             DecoratedBox(
-              decoration: BoxDecoration(color: Palette.sage, borderRadius: BorderRadius.circular(Radii.sheet)),
+              decoration: BoxDecoration(
+                  color: Palette.sage,
+                  borderRadius: BorderRadius.circular(Radii.sheet)),
               child: Padding(
                 padding: const EdgeInsets.all(Space.lg),
                 child: HoldTicket(
@@ -983,25 +1201,77 @@ class _ClassReviewStepState extends ConsumerState<ClassReviewStep> {
                   ],
                   held: held,
                   heldCaption: 'kept aside, not taken',
-                  rules: business.policyLines.map(TicketRule.fromNotice).toList(),
-                  footnote: 'Any tax is added on the PayPal page, where you see the exact total before you approve.',
+                  rules:
+                      business.policyLines.map(TicketRule.fromNotice).toList(),
+                  footnote:
+                      'Any tax is added on the PayPal page, where you see the exact total before you approve.',
                 ),
               ),
             ),
-            if (offersDeposit && service.paymentOptions.contains('full_held')) ...[
+            if (offersDeposit &&
+                service.paymentOptions.contains('full_held')) ...[
               const SizedBox(height: Space.xl),
               _PayOption(
                 title: 'Keep a deposit aside',
-                subtitle: '${formatMoney(service.deposit, business.currency)} now, the rest when you come',
+                subtitle:
+                    '${formatMoney(service.deposit, business.currency)} now, the rest when you come',
                 selected: option == 'deposit_held',
-                onTap: () => widget.state.withPay('deposit_held').go(context, business.slug),
+                onTap: () => widget.state
+                    .withPay('deposit_held')
+                    .go(context, business.slug),
               ),
               _PayOption(
                 title: 'Keep the full price aside',
-                subtitle: '${formatMoney(service.price, business.currency)} now, nothing to pay when you come',
+                subtitle:
+                    '${formatMoney(service.price, business.currency)} now, nothing to pay when you come',
                 selected: option == 'full_held',
-                onTap: () => widget.state.withPay('full_held').go(context, business.slug),
+                onTap: () => widget.state
+                    .withPay('full_held')
+                    .go(context, business.slug),
               ),
+            ],
+            Form(
+              key: _contactForm,
+              child: Column(children: [
+                TextFormField(
+                  controller: _name,
+                  maxLength: 80,
+                  textCapitalization: TextCapitalization.words,
+                  textInputAction: TextInputAction.next,
+                  decoration: InputDecoration(
+                      labelText: context.tr('booking.contact.name'),
+                      counterText: ''),
+                  validator: (value) => value == null || value.trim().isEmpty
+                      ? context.tr('booking.contact.name_required')
+                      : null,
+                ),
+                const SizedBox(height: Space.md),
+                TextFormField(
+                  controller: _email,
+                  keyboardType: TextInputType.emailAddress,
+                  autofillHints: const [AutofillHints.email],
+                  textInputAction: TextInputAction.done,
+                  decoration: InputDecoration(
+                      labelText: context.tr('booking.contact.email')),
+                  validator: (value) {
+                    final email = value?.trim() ?? '';
+                    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)
+                        ? null
+                        : context.tr('booking.contact.email_invalid');
+                  },
+                ),
+                const SizedBox(height: Space.sm),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(context.tr('booking.contact.email_delivery'),
+                      style: text.bodySmall?.copyWith(color: Palette.muted)),
+                ),
+              ]),
+            ),
+            if (_authProblem != null) ...[
+              const SizedBox(height: Space.md),
+              Text(_authProblem!,
+                  style: text.bodySmall?.copyWith(color: Palette.muted)),
             ],
             if (_problem != null) ...[
               const SizedBox(height: Space.lg),

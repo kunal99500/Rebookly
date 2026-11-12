@@ -10,12 +10,10 @@ import '../../core/auth/auth_service.dart';
 import '../../shared/brand.dart';
 import 'auth_layout.dart';
 
-/// Clients create or access their account with a phone number and a 6-digit code.
+/// Clients sign in with their phone number and a 6-digit code.
 /// After verification, the router returns them to the page they requested.
 class ClientSignInScreen extends ConsumerStatefulWidget {
-  const ClientSignInScreen({super.key, this.isSignUp = false});
-
-  final bool isSignUp;
+  const ClientSignInScreen({super.key});
 
   @override
   ConsumerState<ClientSignInScreen> createState() => _ClientSignInScreenState();
@@ -25,7 +23,7 @@ class _ClientSignInScreenState extends ConsumerState<ClientSignInScreen> {
   final _countryCode = TextEditingController(text: '+91');
   final _number = TextEditingController();
   final _code = TextEditingController();
-  String? _sentTo;      // the full number a code was sent to
+  String? _sentTo; // the full number a code was sent to
   String? _error;
   bool _busy = false;
   int _resendIn = 0;
@@ -109,20 +107,15 @@ class _ClientSignInScreenState extends ConsumerState<ClientSignInScreen> {
           BrandMark(),
           SizedBox(height: 48),
           Text(
-            codeStep
-                ? context.tr('signin.enter_code')
-                : widget.isSignUp
-                    ? context.tr('signup.title')
-                    : context.tr('signin.title'),
-            style: text.displaySmall,
-          ),
+              codeStep
+                  ? context.tr('signin.enter_code')
+                  : context.tr('signin.title'),
+              style: text.displaySmall),
           SizedBox(height: Space.md),
           Text(
             codeStep
                 ? context.tr('signin.sent', {'phone': _sentTo})
-                : widget.isSignUp
-                    ? context.tr('signup.lead')
-                    : context.tr('signin.no_password'),
+                : context.tr('signin.no_password'),
             style: text.bodyLarge?.copyWith(color: Palette.muted),
           ),
           SizedBox(height: Space.xxl),
@@ -133,8 +126,12 @@ class _ClientSignInScreenState extends ConsumerState<ClientSignInScreen> {
                 child: TextField(
                   controller: _countryCode,
                   keyboardType: TextInputType.phone,
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[+0-9]')), LengthLimitingTextInputFormatter(5)],
-                  decoration: InputDecoration(labelText: context.tr('signin.country_code')),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[+0-9]')),
+                    LengthLimitingTextInputFormatter(5)
+                  ],
+                  decoration: InputDecoration(
+                      labelText: context.tr('signin.country_code')),
                 ),
               ),
               SizedBox(width: Space.sm),
@@ -144,10 +141,14 @@ class _ClientSignInScreenState extends ConsumerState<ClientSignInScreen> {
                   autofocus: true,
                   keyboardType: TextInputType.phone,
                   autofillHints: [AutofillHints.telephoneNumberNational],
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9 ]')), LengthLimitingTextInputFormatter(16)],
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9 ]')),
+                    LengthLimitingTextInputFormatter(16)
+                  ],
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _busy ? null : _sendCode(),
-                  decoration: InputDecoration(labelText: context.tr('signin.mobile')),
+                  decoration:
+                      InputDecoration(labelText: context.tr('signin.mobile')),
                 ),
               ),
             ]),
@@ -157,11 +158,16 @@ class _ClientSignInScreenState extends ConsumerState<ClientSignInScreen> {
               autofocus: true,
               keyboardType: TextInputType.number,
               autofillHints: [AutofillHints.oneTimeCode],
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(6)],
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(6)
+              ],
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => _busy ? null : _verify(),
-              style: text.headlineMedium?.copyWith(letterSpacing: 10, fontFeatures: Fonts.tabular),
-              decoration: InputDecoration(labelText: context.tr('signin.six_digit'), counterText: ''),
+              style: text.headlineMedium
+                  ?.copyWith(letterSpacing: 10, fontFeatures: Fonts.tabular),
+              decoration: InputDecoration(
+                  labelText: context.tr('signin.six_digit'), counterText: ''),
             ),
           ],
           if (_error != null) ...[
@@ -174,11 +180,13 @@ class _ClientSignInScreenState extends ConsumerState<ClientSignInScreen> {
             child: FilledButton(
               onPressed: _busy ? null : (codeStep ? _verify : _sendCode),
               child: _busy
-                  ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2, color: Colors.white))
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2.2, color: Colors.white))
                   : Text(codeStep
-                      ? widget.isSignUp
-                          ? context.tr('signup.verify')
-                          : context.tr('signin.verify')
+                      ? context.tr('signin.verify')
                       : context.tr('signin.send')),
             ),
           ),
@@ -186,23 +194,24 @@ class _ClientSignInScreenState extends ConsumerState<ClientSignInScreen> {
             SizedBox(height: Space.md),
             Wrap(spacing: Space.sm, children: [
               TextButton(
-                onPressed: _busy ? null : () => setState(() {
-                  _sentTo = null;
-                  _error = null;
-                }),
+                onPressed: _busy
+                    ? null
+                    : () => setState(() {
+                          _sentTo = null;
+                          _error = null;
+                        }),
                 child: Text(context.tr('signin.change_number')),
               ),
               TextButton(
                 onPressed: _busy || _resendIn > 0 ? null : _sendCode,
-                child: Text(_resendIn > 0 ? context.tr('signin.resend_in', {'seconds': _resendIn}) : context.tr('signin.send_new')),
+                child: Text(_resendIn > 0
+                    ? context.tr('signin.resend_in', {'seconds': _resendIn})
+                    : context.tr('signin.send_new')),
               ),
             ]),
           ],
           SizedBox(height: 40),
-          Text(
-            widget.isSignUp ? context.tr('signup.privacy') : context.tr('signin.privacy'),
-            style: text.bodySmall,
-          ),
+          Text(context.tr('signin.privacy'), style: text.bodySmall),
         ]),
       ),
     );
@@ -215,16 +224,19 @@ class _ClientAside extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    return Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(
-        context.tr('signin.aside_title'),
-        style: text.displaySmall?.copyWith(color: Colors.white),
-      ),
-      SizedBox(height: Space.lg),
-      Text(
-        context.tr('signin.aside_body'),
-        style: text.bodyLarge?.copyWith(color: Palette.sageDeep),
-      ),
-    ]);
+    return Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            context.tr('signin.aside_title'),
+            style: text.displaySmall?.copyWith(color: Colors.white),
+          ),
+          SizedBox(height: Space.lg),
+          Text(
+            context.tr('signin.aside_body'),
+            style: text.bodyLarge?.copyWith(color: Palette.sageDeep),
+          ),
+        ]);
   }
 }

@@ -53,8 +53,12 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       // ---------- public ----------
       GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
-      GoRoute(path: '/for-clients', builder: (context, state) => const ForClientsScreen()),
-      GoRoute(path: '/for-business', builder: (context, state) => const ForBusinessScreen()),
+      GoRoute(
+          path: '/for-clients',
+          builder: (context, state) => const ForClientsScreen()),
+      GoRoute(
+          path: '/for-business',
+          builder: (context, state) => const ForBusinessScreen()),
       GoRoute(
         path: '/search',
         builder: (context, state) => SearchScreen(
@@ -64,7 +68,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/b/:slug',
-        builder: (context, state) => BusinessScreen(slug: state.pathParameters['slug']!),
+        builder: (context, state) =>
+            BusinessScreen(slug: state.pathParameters['slug']!),
         routes: [
           GoRoute(
             path: 'book',
@@ -77,31 +82,47 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
 
       // ---------- sign-in ----------
-      GoRoute(path: '/signin', builder: (context, state) => const ClientSignInScreen()),
-      GoRoute(path: '/signup', builder: (context, state) => const ClientSignInScreen(isSignUp: true)),
-      GoRoute(path: '/business/signin', builder: (context, state) => const OwnerSignInScreen()),
+      GoRoute(
+          path: '/signin',
+          builder: (context, state) => const ClientSignInScreen()),
+      GoRoute(path: '/signup', redirect: (context, state) => '/search'),
+      GoRoute(
+          path: '/business/signin',
+          builder: (context, state) => const OwnerSignInScreen()),
 
       // ---------- clients ----------
+      GoRoute(
+        path: '/checkout/:bookingId',
+        builder: (context, state) => CheckoutScreen(
+          bookingId: state.pathParameters['bookingId']!,
+          checkoutUrl: state.uri.queryParameters['pay'],
+          until: DateTime.tryParse(state.uri.queryParameters['until'] ?? ''),
+          businessSlug: state.uri.queryParameters['from'],
+        ),
+      ),
       GoRoute(
         path: '/my',
         builder: (context, state) => const MyBookingsScreen(),
         routes: [
           GoRoute(
             path: 'bookings/:id',
-            builder: (context, state) => BookingDetailScreen(bookingId: state.pathParameters['id']!),
+            builder: (context, state) =>
+                BookingDetailScreen(bookingId: state.pathParameters['id']!),
             routes: [
               GoRoute(
                 path: 'checkout',
                 builder: (context, state) => CheckoutScreen(
                   bookingId: state.pathParameters['id']!,
                   checkoutUrl: state.uri.queryParameters['pay'],
-                  until: DateTime.tryParse(state.uri.queryParameters['until'] ?? ''),
+                  until: DateTime.tryParse(
+                      state.uri.queryParameters['until'] ?? ''),
                   businessSlug: state.uri.queryParameters['from'],
                 ),
               ),
               GoRoute(
                 path: 'move',
-                builder: (context, state) => MoveBookingScreen(bookingId: state.pathParameters['id']!),
+                builder: (context, state) =>
+                    MoveBookingScreen(bookingId: state.pathParameters['id']!),
               ),
             ],
           ),
@@ -133,14 +154,17 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'setup',
             builder: (context, state) => SetupScreen(
               businessId: state.uri.queryParameters['business'],
-              policyVersion: int.tryParse(state.uri.queryParameters['policy'] ?? ''),
+              policyVersion:
+                  int.tryParse(state.uri.queryParameters['policy'] ?? ''),
             ),
           ),
           GoRoute(
             path: 'bookings',
             builder: (context, state) => const OwnerBookingsScreen(),
           ),
-          GoRoute(path: 'check-in', builder: (context, state) => const CheckInScreen()),
+          GoRoute(
+              path: 'check-in',
+              builder: (context, state) => const CheckInScreen()),
           GoRoute(
             path: 'approvals',
             builder: (context, state) => const ApprovalsScreen(),
@@ -155,7 +179,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: 'settings/:section',
-            builder: (context, state) => switch (state.pathParameters['section']) {
+            builder: (context, state) =>
+                switch (state.pathParameters['section']) {
               'profile' => const BusinessSettingsScreen(),
               'services' => const ServicesSettingsScreen(),
               'team' => const TeamSettingsScreen(),
@@ -164,7 +189,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               'location' => const LocationSettingsScreen(),
               'tax' => const TaxSettingsScreen(),
               'paypal' => const PayPalSettingsScreen(),
-              'plan' => PlanSettingsScreen(checkOnOpen: state.uri.queryParameters['check'] == '1'),
+              'plan' => PlanSettingsScreen(
+                  checkOnOpen: state.uri.queryParameters['check'] == '1'),
               _ => const NotFoundScreen(),
             },
           ),
@@ -176,8 +202,10 @@ final routerProvider = Provider<GoRouter>((ref) {
 
 String? _guard(AuthService auth, GoRouterState state) {
   final path = state.uri.path;
-  final clientArea = path == '/my' || path.startsWith('/my/') || path == '/assistant';
-  final ownerArea = (path == '/business' || path.startsWith('/business/')) && path != '/business/signin';
+  final clientArea =
+      path == '/my' || path.startsWith('/my/') || path == '/assistant';
+  final ownerArea = (path == '/business' || path.startsWith('/business/')) &&
+      path != '/business/signin';
   final here = state.uri.toString();
 
   // Clients sign in with their phone (Firebase); owners with email (Supabase).
@@ -185,15 +213,17 @@ String? _guard(AuthService auth, GoRouterState state) {
     return Uri(path: '/signin', queryParameters: {'from': here}).toString();
   }
   if (ownerArea && !auth.isOwnerSignedIn) {
-    return Uri(path: '/business/signin', queryParameters: {'from': here}).toString();
+    return Uri(path: '/business/signin', queryParameters: {'from': here})
+        .toString();
   }
-  final signedInHere = ((path == '/signin' || path == '/signup') && auth.isClientSignedIn) ||
+  final signedInHere = (path == '/signin' && auth.isClientSignedIn) ||
       (path == '/business/signin' && auth.isOwnerSignedIn);
   if (signedInHere) {
-    if (path == '/signup') return '/search';
     final from = state.uri.queryParameters['from'];
     // Only go back to our own pages (never to another site).
-    if (from != null && from.startsWith('/') && !from.startsWith('//')) return from;
+    if (from != null && from.startsWith('/') && !from.startsWith('//')) {
+      return from;
+    }
     return path == '/signin' ? '/my' : '/business';
   }
   return null;

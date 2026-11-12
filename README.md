@@ -47,7 +47,7 @@ frontend/
 - Python with `venv` support and pip
 - Flutter 3.27 or newer (Dart 3.5 or newer)
 - A PostgreSQL database for persistent backend features; Supabase Postgres is the configured provider
-- Optional service accounts for Supabase Auth/Storage, Firebase phone sign-in, PayPal, OpenAI, Langfuse, a geocoding provider, and Resend email
+- Optional service accounts for Supabase Auth/Storage, Firebase phone and anonymous auth, PayPal, OpenAI, Langfuse, a geocoding provider, and Resend email
 
 Most third-party integrations are optional in development. Features that require an unconfigured integration remain unavailable and the backend logs a warning.
 

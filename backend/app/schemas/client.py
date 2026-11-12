@@ -1,5 +1,6 @@
 """What the client API accepts and returns."""
 import uuid
+import re
 from datetime import datetime
 from decimal import Decimal
 from typing import Literal
@@ -25,7 +26,7 @@ class ProfileOut(BaseModel):
 class EmailIn(BaseModel):
        model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
-       email: str = Field(min_length=3, max_length=254)
+       email: str | None = Field(default=None, min_length=3, max_length=254)
 
 
 class EmailCodeIn(BaseModel):
@@ -39,9 +40,20 @@ class BookingCreate(BaseModel):
 
     service_ids: list[uuid.UUID] = Field(min_length=1, max_length=10)
     starts_at: datetime
+    name: str = Field(min_length=1, max_length=80)
+    email: str = Field(min_length=3, max_length=254)
     staff_id: uuid.UUID | None = Field(default=None, description="Leave empty for any available staff member")
     payment_option: Literal["deposit_held", "full_held"]
     attendee_name: str | None = Field(default=None, max_length=80)
+
+    @field_validator("email")
+    @classmethod
+    def _valid_email(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value):
+            raise ValueError("Enter a valid email address")
+        return value.lower()
 
     @field_validator("starts_at")
     @classmethod
@@ -56,8 +68,19 @@ class ClassBookingCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     slot_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=80)
+    email: str | None = Field(default=None, min_length=3, max_length=254)
     payment_option: Literal["deposit_held", "full_held"]
     attendee_name: str | None = Field(default=None, max_length=80)
+
+    @field_validator("email")
+    @classmethod
+    def _valid_email(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value):
+            raise ValueError("Enter a valid email address")
+        return value.lower()
 
 
 class BookingStarted(BaseModel):

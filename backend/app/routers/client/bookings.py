@@ -36,6 +36,11 @@ def _service(request: Request, name: str):
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, f"{name} is not configured on the server")
     return value
 
+def _require_booking_email(email: str | None) -> str:
+    if email is None:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Enter an email address to receive your booking details")
+    return email
+
 def _profile_out(request: Request, client) -> ProfileOut:
        phone = _service(request, "phones").reveal(client.phone_encrypted) if client.phone_encrypted else None
        verified = client.email if client.email_verified_at else None
@@ -84,7 +89,11 @@ async def start_booking(
 ):
     """Book an appointment (one or more services). The time is held for 15 minutes while you pay."""
     _service(request, "paypal")  # fail early if payments aren't available
-    client = await clients.require_client(session, user)
+    _require_booking_email(data.email)
+    client = await clients.client_for_booking(
+        session, user, data.name, getattr(request.app.state, "phones", None),
+        allow_dev_phone=get_settings().enable_dev_routes,
+    )
     booking = await bookings.create_booking(session, client, data)
     return await _start_checkout(request, session, booking)
 
@@ -98,7 +107,11 @@ async def start_class_booking(
 ):
     """Book a seat in a group class session. The seat is held for 15 minutes while you pay."""
     _service(request, "paypal")
-    client = await clients.require_client(session, user)
+    _require_booking_email(data.email)
+    client = await clients.client_for_booking(
+        session, user, data.name, getattr(request.app.state, "phones", None),
+        allow_dev_phone=get_settings().enable_dev_routes,
+    )
     booking = await bookings.create_class_booking(session, client, data)
     return await _start_checkout(request, session, booking)
 
@@ -143,6 +156,14 @@ async def _my_booking(session: AsyncSession, user: AuthUser, booking_id: uuid.UU
 async def one_booking(
     booking_id: uuid.UUID, user: AuthUser = Depends(get_current_user), session: AsyncSession = Depends(get_session)
 ):
+    if user.is_anonymous:
+        client = await clients.get_client(session, user)
+        booking = None if client is None else await session.scalar(
+            select(Booking).where(Booking.id == booking_id, Booking.client_id == client.id)
+        )
+        if booking is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Booking not found")
+        return await _booking_out(session, booking)
     return await _booking_out(session, await _my_booking(session, user, booking_id))
 
 

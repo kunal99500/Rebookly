@@ -24,18 +24,23 @@ def _lines(kind: str, p: dict) -> tuple[str, list[str]]:
             f"{p.get('client_name')} booked {visit} on {when}.", f"{p.get('held')} is held.", f"Reference: {p.get('ref')}"]
     if kind in ("reminder_24h", "reminder_2h"):
         soon = "tomorrow" if kind == "reminder_24h" else "in about 2 hours"
+        management = ("Need to change it? Open My bookings to reschedule or cancel."
+                      if p.get("has_account") else "Need to change it? Contact the business directly.")
         return f"Reminder: {visit} {soon}", [
             f"See you {soon}: {visit} at {biz}, {when}.", p.get("policy_line", ""),
-            "Need to change it? Open My bookings to reschedule or cancel."]
+            management]
     if kind == "booking_cancelled":
         return f"Cancelled: {visit} on {when}", [
             f"The booking for {visit} at {biz} on {when} was cancelled ({p.get('by', 'cancelled')}).",
             p.get("outcome", "")]
     if kind == "booking_rescheduled":
         if p.get("by_owner"):
+            next_step = ("If the new time doesn't work, contact the business."
+                         if not p.get("has_account") else
+                         "If the new time doesn't work for you, you can cancel this booking without a fee.")
             return f"{biz} moved your booking to {when}", [
                 f"{biz} needed to move your booking for {visit}. It's now on {when}.",
-                "If the new time doesn't work for you, you can cancel this booking without a fee.",
+                next_step,
                 f"Reference: {p.get('ref')}"]
         return f"Moved: {visit} is now {when}", [f"Your booking for {visit} at {biz} is now on {when}.",
                                                  f"Reference: {p.get('ref')}"]

@@ -11,18 +11,23 @@ class StaffChoice {
   final String id;
   final String name;
 
-  factory StaffChoice.fromJson(Map<String, dynamic> json) =>
-      StaffChoice(id: json['id'].toString(), name: json['name'] as String? ?? 'Staff');
+  factory StaffChoice.fromJson(Map<String, dynamic> json) => StaffChoice(
+      id: json['id'].toString(), name: json['name'] as String? ?? 'Staff');
 }
 
 /// One bookable start time. [raw] is the exact text the backend sent, sent back unchanged when booking.
 class TimeSlot {
-  const TimeSlot({required this.raw, required this.startsAt, required this.endsAt, required this.staff});
+  const TimeSlot(
+      {required this.raw,
+      required this.startsAt,
+      required this.endsAt,
+      required this.staff});
 
   final String raw;
   final DateTime startsAt;
   final DateTime endsAt;
-  final List<StaffChoice> staff;   // who is free then; the first is the suggestion
+  final List<StaffChoice>
+      staff; // who is free then; the first is the suggestion
 
   factory TimeSlot.fromJson(Map<String, dynamic> json) => TimeSlot(
         raw: json['starts_at'] as String,
@@ -39,7 +44,7 @@ class NoticeLine {
   const NoticeLine({required this.label, required this.amount});
 
   final String label;
-  final String amount;   // already formatted by the backend, e.g. "₹80.00"
+  final String amount; // already formatted by the backend, e.g. "₹80.00"
 }
 
 /// The deposit notice, written by the backend from the real amounts and policy.
@@ -65,9 +70,14 @@ class DepositNotice {
         summary: json['summary'] as String? ?? '',
         lines: [
           for (final item in (json['lines'] as List? ?? const []))
-            NoticeLine(label: (item as Map)['label'].toString(), amount: item['amount'].toString()),
+            NoticeLine(
+                label: (item as Map)['label'].toString(),
+                amount: item['amount'].toString()),
         ],
-        policy: [for (final line in (json['policy'] as List? ?? const [])) line.toString()],
+        policy: [
+          for (final line in (json['policy'] as List? ?? const []))
+            line.toString()
+        ],
         paymentOption: json['payment_option'] as String? ?? 'deposit_held',
         ownerNote: json['owner_note'] as String?,
       );
@@ -93,8 +103,10 @@ class Availability {
   final int durationMinutes;
   final String price;
   final String deposit;
-  final String totalPrice;        // what the client pays for the whole visit, tax included
-  final String? taxLabel;         // e.g. "GST"; null when the business doesn't charge tax
+  final String
+      totalPrice; // what the client pays for the whole visit, tax included
+  final String?
+      taxLabel; // e.g. "GST"; null when the business doesn't charge tax
   final String taxAmount;
   final bool pricesIncludeTax;
   final String currency;
@@ -116,9 +128,14 @@ class Availability {
         taxAmount: (json['tax_amount'] ?? '0').toString(),
         pricesIncludeTax: json['prices_include_tax'] as bool? ?? true,
         currency: json['currency'] as String? ?? 'USD',
-        paymentOptions: [for (final option in (json['payment_options'] as List? ?? const [])) option.toString()],
-        notice: DepositNotice.fromJson(Map<String, dynamic>.from(json['deposit_notice'] as Map? ?? const {})),
-        showNoticeBeforeTimes: json['show_notice_before_times'] as bool? ?? true,
+        paymentOptions: [
+          for (final option in (json['payment_options'] as List? ?? const []))
+            option.toString()
+        ],
+        notice: DepositNotice.fromJson(Map<String, dynamic>.from(
+            json['deposit_notice'] as Map? ?? const {})),
+        showNoticeBeforeTimes:
+            json['show_notice_before_times'] as bool? ?? true,
         staffChoices: [
           for (final item in (json['staff_choices'] as List? ?? const []))
             StaffChoice.fromJson(Map<String, dynamic>.from(item as Map)),
@@ -131,7 +148,11 @@ class Availability {
 }
 
 class ClassSession {
-  const ClassSession({required this.id, required this.startsAt, required this.endsAt, required this.seatsLeft});
+  const ClassSession(
+      {required this.id,
+      required this.startsAt,
+      required this.endsAt,
+      required this.seatsLeft});
 
   final String id;
   final DateTime startsAt;
@@ -192,9 +213,10 @@ class ClientBooking {
   });
 
   final String id;
-  final String status;          // pending_payment, confirmed, expired, cancelled, attended, no_show
+  final String
+      status; // pending_payment, confirmed, expired, cancelled, attended, no_show
   final String businessName;
-  final String serviceName;     // "Haircut + Hair wash"
+  final String serviceName; // "Haircut + Hair wash"
   final String? staffName;
   final DateTime startsAt;
   final DateTime endsAt;
@@ -205,7 +227,8 @@ class ClientBooking {
   final String paymentOption;
   final String? confirmationNumber;
   final List<BookingItem> items;
-  final String? checkInToken;   // shown as a QR code for the business to scan at check-in
+  final String?
+      checkInToken; // shown as a QR code for the business to scan at check-in
   final String? attendeeName;
 
   bool get isPending => status == 'pending_payment';
@@ -235,7 +258,11 @@ class ClientBooking {
 }
 
 class BookingItem {
-  const BookingItem({required this.name, required this.kind, required this.durationMinutes, required this.price});
+  const BookingItem(
+      {required this.name,
+      required this.kind,
+      required this.durationMinutes,
+      required this.price});
 
   final String name;
   final String kind;
@@ -255,7 +282,8 @@ class BookingItem {
 /// Which services, and optionally which staff member. Service IDs are joined with commas so equal requests match.
 typedef AvailabilityKey = ({String slug, String serviceIds, String? staffId});
 
-final availabilityProvider = FutureProvider.autoDispose.family<Availability, AvailabilityKey>((ref, key) async {
+final availabilityProvider = FutureProvider.autoDispose
+    .family<Availability, AvailabilityKey>((ref, key) async {
   final json = await ref.watch(apiClientProvider).post(
     '/api/public/businesses/${Uri.encodeComponent(key.slug)}/availability',
     body: {
@@ -268,10 +296,14 @@ final availabilityProvider = FutureProvider.autoDispose.family<Availability, Ava
 
 typedef SessionsKey = ({String slug, String serviceId});
 
-final classSessionsProvider = FutureProvider.autoDispose.family<List<ClassSession>, SessionsKey>((ref, key) async {
+final classSessionsProvider = FutureProvider.autoDispose
+    .family<List<ClassSession>, SessionsKey>((ref, key) async {
   final json = await ref.watch(apiClientProvider).get(
       '/api/public/businesses/${Uri.encodeComponent(key.slug)}/services/${key.serviceId}/slots');
-  return [for (final item in json as List) ClassSession.fromJson(Map<String, dynamic>.from(item as Map))];
+  return [
+    for (final item in json as List)
+      ClassSession.fromJson(Map<String, dynamic>.from(item as Map))
+  ];
 });
 
 // ---------- doing ----------
@@ -292,12 +324,15 @@ class BookingApi {
     }
   }
 
-  Future<void> saveName(String name) => _api.put('/api/client/profile', body: {'name': name});
+  Future<void> saveName(String name) =>
+      _api.put('/api/client/profile', body: {'name': name});
 
   Future<BookingStarted> startAppointment({
     required List<String> serviceIds,
     required String startsAt,
     required String paymentOption,
+    required String name,
+    required String email,
     String? staffId,
     String? attendeeName,
   }) async {
@@ -305,17 +340,29 @@ class BookingApi {
       'service_ids': serviceIds,
       'starts_at': startsAt,
       'payment_option': paymentOption,
+      'name': name,
+      'email': email,
       if (staffId != null) 'staff_id': staffId,
-      if (attendeeName != null && attendeeName.isNotEmpty) 'attendee_name': attendeeName,
+      if (attendeeName != null && attendeeName.isNotEmpty)
+        'attendee_name': attendeeName,
     });
     return BookingStarted.fromJson(Map<String, dynamic>.from(json as Map));
   }
 
-  Future<BookingStarted> startClass({required String slotId, required String paymentOption, String? attendeeName}) async {
+  Future<BookingStarted> startClass({
+    required String slotId,
+    required String paymentOption,
+    required String name,
+    required String email,
+    String? attendeeName,
+  }) async {
     final json = await _api.post('/api/client/bookings/class', body: {
       'slot_id': slotId,
       'payment_option': paymentOption,
-      if (attendeeName != null && attendeeName.isNotEmpty) 'attendee_name': attendeeName,
+      'name': name,
+      'email': email,
+      if (attendeeName != null && attendeeName.isNotEmpty)
+        'attendee_name': attendeeName,
     });
     return BookingStarted.fromJson(Map<String, dynamic>.from(json as Map));
   }
@@ -333,9 +380,16 @@ class BookingApi {
     String? latest,
     String? slotId,
   }) =>
-      _api.post('/api/client/waitlist', body: slotId != null
-          ? {'slot_id': slotId}
-          : {'service_ids': serviceIds, 'wanted_date': wantedDate, 'earliest_time': earliest, 'latest_time': latest});
+      _api.post('/api/client/waitlist',
+          body: slotId != null
+              ? {'slot_id': slotId}
+              : {
+                  'service_ids': serviceIds,
+                  'wanted_date': wantedDate,
+                  'earliest_time': earliest,
+                  'latest_time': latest
+                });
 }
 
-final bookingApiProvider = Provider<BookingApi>((ref) => BookingApi(ref.watch(apiClientProvider)));
+final bookingApiProvider =
+    Provider<BookingApi>((ref) => BookingApi(ref.watch(apiClientProvider)));

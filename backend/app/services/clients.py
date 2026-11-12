@@ -1,4 +1,4 @@
-"""Client profiles: name plus a protected, verified phone number."""
+"""Client profiles: named bookings, with phone numbers protected when provided."""
 import uuid
 
 from fastapi import HTTPException, status
@@ -20,10 +20,30 @@ async def get_client(session: AsyncSession, user: AuthUser) -> Client | None:
 
 
 async def require_client(session: AsyncSession, user: AuthUser) -> Client:
+    if user.is_anonymous:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Sign in to access your account")
     client = await get_client(session, user)
     if client is None:
         raise HTTPException(status.HTTP_409_CONFLICT, "Add your name and phone number first")
     return client
+
+
+async def client_for_booking(
+    session: AsyncSession, user: AuthUser, name: str, phones: PhoneProtector | None, allow_dev_phone: bool
+) -> Client:
+    """Return a client record, creating a phone-less guest record for anonymous bookings."""
+    client = await get_client(session, user)
+    if client is not None:
+        client.name = name
+        return client
+    if user.is_anonymous:
+        client = Client(id=uuid.uuid4(), auth_user_id=user.id, name=name)
+        session.add(client)
+        await session.flush()
+        return client
+    if phones is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Phone protection is not configured on the server")
+    return await save_profile(session, user, ProfileIn(name=name), phones, allow_dev_phone=allow_dev_phone)
 
 
 async def save_profile(

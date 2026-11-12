@@ -48,6 +48,7 @@ class Booking(UUIDPrimaryKey, Timestamps, Base):
            UUID(as_uuid=True), ForeignKey("staff.id", ondelete="RESTRICT")
        )
     client_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("clients.id", ondelete="RESTRICT"))
+    client_email: Mapped[str | None] = mapped_column(String(254))
     attendee_name: Mapped[str | None] = mapped_column(String(80))  # when booking for someone else
 
     status: Mapped[str] = mapped_column(String(20), default="pending_payment", server_default="pending_payment")

@@ -4,6 +4,7 @@ Each test reads like a story: a client books and pays, and then something happen
 matters to people: the booking's state, where the money went, and that nothing happened twice.
 """
 import asyncio
+import uuid
 from decimal import Decimal
 
 import pytest
@@ -11,9 +12,10 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 
 from app.models import Booking, Decision, Document, Notification, Payment, Slot
+from app.auth.supabase_auth import AuthUser
 from app.rules.engine import Event
 from app.schemas.client import BookingCreate, ClassBookingCreate
-from app.services import bookings, outcomes, refills, rescheduling
+from app.services import bookings, clients, outcomes, refills, rescheduling
 
 from .conftest import at
 
@@ -22,7 +24,8 @@ pytestmark = pytest.mark.asyncio
 
 async def book_and_pay(session, paypal, client, service, starts_at, option="deposit_held"):
     booking = await bookings.create_booking(session, client, BookingCreate(
-        service_ids=[service.id], starts_at=starts_at, payment_option=option))
+        service_ids=[service.id], starts_at=starts_at, payment_option=option,
+        name=client.name, email="client@example.com"))
     await bookings.hold_payment(session, paypal, booking)
     await bookings.authorize_hold(session, paypal, booking)
     await session.refresh(booking)
@@ -54,6 +57,22 @@ async def test_booking_is_confirmed_with_a_hold_a_receipt_and_messages(db, paypa
         owner_alerts = await session.scalar(select(func.count()).select_from(Notification).where(
             Notification.booking_id == booking.id, Notification.kind == "new_booking"))
         assert owner_alerts == 1
+        client_confirmation = await session.scalar(select(Notification).where(
+            Notification.booking_id == booking.id, Notification.kind == "booking_confirmed",
+            Notification.recipient_type == "client"))
+        assert client_confirmation.to_address == "client@example.com"
+
+
+async def test_guest_booking_uses_the_submitted_email(db, make_business):
+    async with db.session_scope() as session:
+        _, haircut, _, _ = await make_business(session)
+        guest_user = AuthUser(id=uuid.uuid4(), phone=None, email=None, session_id=None, is_anonymous=True)
+        guest = await clients.client_for_booking(session, guest_user, "Guest", phones=None, allow_dev_phone=False)
+        booking = await bookings.create_booking(session, guest, BookingCreate(
+            service_ids=[haircut.id], starts_at=at(26), payment_option="deposit_held",
+            name="Guest", email="guest@example.com"))
+        assert booking.client_email == "guest@example.com"
+        assert guest.phone_verified_at is None
 
 
 async def test_the_same_time_can_never_be_double_booked(db, paypal, make_business, make_client):
@@ -66,7 +85,8 @@ async def test_the_same_time_can_never_be_double_booked(db, paypal, make_busines
         async with db.session_scope() as session:
             try:
                 await bookings.create_booking(session, client, BookingCreate(
-                    service_ids=[haircut.id], starts_at=starts_at, payment_option="deposit_held"))
+                    service_ids=[haircut.id], starts_at=starts_at, payment_option="deposit_held",
+                    name=client.name, email="client@example.com"))
                 return "booked"
             except HTTPException as err:
                 return err.status_code
@@ -179,7 +199,7 @@ async def test_three_clients_race_for_two_seats(db, paypal, make_business, make_
         async with db.session_scope() as session:
             try:
                 await bookings.create_class_booking(session, client, ClassBookingCreate(
-                    slot_id=slot.id, payment_option="deposit_held"))
+                    slot_id=slot.id, payment_option="deposit_held", name=client.name, email="client@example.com"))
                 return "seat"
             except HTTPException as err:
                 return err.status_code

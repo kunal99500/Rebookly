@@ -28,6 +28,11 @@ def test_valid_firebase_token():
     assert user.phone == "+919720072866" and user.id == firebase_user_uuid("firebase-uid-123")
     assert user.id == firebase_user_uuid("firebase-uid-123")       # stable for the same person
 
+def test_anonymous_firebase_token_is_identified_as_guest():
+    user = verifier.verify(token(phone_number=None, firebase={"sign_in_provider": "anonymous"}))
+    assert user.is_anonymous is True
+    assert user.phone is None
+
 @pytest.mark.parametrize("changes", [{"aud": "someone-else"}, {"iss": "https://securetoken.google.com/other"},
                                      {"exp": int(time.time()) - 600}])
 def test_wrong_project_or_expired_is_refused(changes):

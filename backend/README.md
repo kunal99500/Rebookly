@@ -39,7 +39,7 @@ Settings are loaded from `backend/.env` or the process environment by `app.confi
 | `SUPABASE_URL` | Supabase project URL, used for authentication and storage. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Backend-only key for Supabase Storage operations. Never expose it to the frontend. |
 | `SUPABASE_JWT_SECRET` | Legacy HS256 token verification secret, only for projects still using legacy Supabase JWTs. |
-| `FIREBASE_PROJECT_ID` | Firebase project ID for verifying client phone-auth tokens. |
+| `FIREBASE_PROJECT_ID` | Firebase project ID for verifying client phone-auth and anonymous guest-booking tokens. |
 | `DATA_ENCRYPTION_KEY` | Fernet key(s) used to encrypt stored phone numbers. Required in production. Multiple rotation keys may be comma-separated, newest first. |
 | `PHONE_HASH_KEY` | Secret key used to produce lookup hashes for phone numbers. Required in production and must be at least 32 characters. |
 | `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | PayPal application credentials. |
@@ -61,7 +61,7 @@ Settings are loaded from `backend/.env` or the process environment by `app.confi
 | `GEOCODER_API_KEY` | API key if the selected geocoder requires one. |
 | `GEOCODER_USER_AGENT` | Identifying User-Agent for geocoding requests; use a real contact address with public Nominatim. |
 | `GEOCODER_MIN_INTERVAL_SECONDS` | Minimum gap between geocoding requests. Respect the selected provider's usage policy. |
-| `EMAIL_PROVIDER` | `console` logs email content for development; `resend` sends email through Resend. |
+| `EMAIL_PROVIDER` | `console` logs email content for development; `resend` sends email through Resend. Guest booking confirmations go to the email submitted during booking. |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Resend API key and verified sender address when `EMAIL_PROVIDER=resend`. |
 | `ENABLE_DEV_ROUTES` | Enables development-only routes. Must be false in production or with live PayPal. |
 | `SIMULATED_CLOCK` | Enables the development clock controls. Must be false in production or with live PayPal. |
@@ -92,6 +92,8 @@ From the `backend` directory:
 The health endpoint is `GET http://localhost:8000/health`. In development, FastAPI's Swagger UI is at `/docs`; API docs and the OpenAPI schema are disabled in production.
 
 The app can start with optional services unconfigured, but dependent capabilities will be unavailable. Database-backed requests require `DATABASE_URL` and applied migrations. Inspect the startup logs and `/health` when diagnosing configuration.
+
+Guest bookings use Firebase Anonymous Authentication behind the scenes; enable the Anonymous provider in Firebase Authentication. Booking confirmation emails are sent after the client completes the PayPal hold. Production delivery requires `EMAIL_PROVIDER=resend`, a valid `RESEND_API_KEY`, and a verified `EMAIL_FROM` sender.
 
 ## Database migrations
 

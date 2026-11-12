@@ -1,6 +1,6 @@
-"""Client sign-in with Firebase phone codes.
+"""Client identity with Firebase phone or anonymous authentication.
 
-Clients sign in on the app with Firebase (a code by SMS); business owners keep signing in with Supabase.
+Clients use Firebase; business owners keep signing in with Supabase.
 The backend accepts both: AuthVerifier looks at who issued a token and checks it with the right keys.
 
 A Firebase user ID is text, while Rebookly stores user IDs as UUIDs, so each Firebase user is given a
@@ -46,12 +46,14 @@ class FirebaseTokenVerifier:
             raise AuthError("Invalid login token")
         if not claims.get("sub"):
             raise AuthError("Invalid login token")
+        firebase_claim = claims.get("firebase")
+        is_anonymous = isinstance(firebase_claim, dict) and firebase_claim.get("sign_in_provider") == "anonymous"
         return AuthUser(
             id=firebase_user_uuid(claims["sub"]),
             phone=claims.get("phone_number"),
             email=claims.get("email"),
             session_id=None,
-            is_anonymous=False,
+            is_anonymous=is_anonymous,
         )
 
 

@@ -7,8 +7,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/tokens.dart';
 import '../../core/api/api_exception.dart';
+import '../../core/auth/auth_service.dart';
 import '../../core/format/money.dart';
 import '../../core/format/time.dart';
+import '../../core/i18n/i18n.dart';
 import '../../shared/client_shell.dart';
 import '../../shared/hold_ticket.dart';
 import '../../shared/layout.dart';
@@ -19,7 +21,12 @@ import 'booking_data.dart';
 /// It checks the booking every few seconds and turns into the confirmation the moment the hold is placed.
 /// The time is kept for the client until [until]; after that the booking expires and the time is released.
 class CheckoutScreen extends ConsumerStatefulWidget {
-  const CheckoutScreen({super.key, required this.bookingId, this.checkoutUrl, this.until, this.businessSlug});
+  const CheckoutScreen(
+      {super.key,
+      required this.bookingId,
+      this.checkoutUrl,
+      this.until,
+      this.businessSlug});
 
   final String bookingId;
   final String? checkoutUrl;
@@ -58,7 +65,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Future<void> _check() async {
     try {
-      final booking = await ref.read(bookingApiProvider).booking(widget.bookingId);
+      final booking =
+          await ref.read(bookingApiProvider).booking(widget.bookingId);
       if (!mounted) return;
       setState(() {
         _booking = booking;
@@ -92,10 +100,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final booking = _booking;
     final Widget body;
     if (booking == null) {
-      body = _problem == null ? const _Waiting() : _Message(icon: Icons.error_outline_rounded, title: _problem!);
+      body = _problem == null
+          ? const _Waiting()
+          : _Message(icon: Icons.error_outline_rounded, title: _problem!);
     } else if (booking.isConfirmed) {
-      body = _Confirmed(booking: booking);
-    } else if (booking.isPending && (_timeLeft == null || _timeLeft! > Duration.zero)) {
+      body = _Confirmed(
+          booking: booking,
+          isGuest: !ref.watch(authServiceProvider).isClientSignedIn);
+    } else if (booking.isPending &&
+        (_timeLeft == null || _timeLeft! > Duration.zero)) {
       body = _Pay(
         booking: booking,
         timeLeft: _timeLeft,
@@ -107,10 +120,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       body = _Message(
         icon: Icons.timer_off_outlined,
         title: 'This booking timed out',
-        message: 'The hold wasn’t finished in time, so the time was released and nothing was taken. You can book again.',
+        message:
+            'The hold wasn’t finished in time, so the time was released and nothing was taken. You can book again.',
         action: widget.businessSlug == null
             ? null
-            : FilledButton(onPressed: () => context.go('/b/${widget.businessSlug}/book'), child: const Text('Book again')),
+            : FilledButton(
+                onPressed: () => context.go('/b/${widget.businessSlug}/book'),
+                child: const Text('Book again')),
       );
     }
     return ClientShell(child: PageScroll(maxWidth: 680, children: [body]));
@@ -128,7 +144,12 @@ class _Waiting extends StatelessWidget {
 }
 
 class _Pay extends StatelessWidget {
-  const _Pay({required this.booking, required this.timeLeft, required this.canOpen, required this.opened, required this.onOpen});
+  const _Pay(
+      {required this.booking,
+      required this.timeLeft,
+      required this.canOpen,
+      required this.opened,
+      required this.onOpen});
 
   final ClientBooking booking;
   final Duration? timeLeft;
@@ -140,9 +161,12 @@ class _Pay extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final minutes = timeLeft?.inMinutes;
-    final seconds = timeLeft == null ? null : (timeLeft!.inSeconds % 60).toString().padLeft(2, '0');
+    final seconds = timeLeft == null
+        ? null
+        : (timeLeft!.inSeconds % 60).toString().padLeft(2, '0');
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(opened ? 'Finish on PayPal' : 'One last step', style: text.displaySmall),
+      Text(opened ? 'Finish on PayPal' : 'One last step',
+          style: text.displaySmall),
       const SizedBox(height: Space.md),
       Text(
         opened
@@ -154,13 +178,16 @@ class _Pay extends StatelessWidget {
       Panel(
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(booking.serviceName, style: text.titleMedium),
-          Text('${booking.businessName}, ${formatDayTime(booking.startsAt, booking.timezone)}', style: text.bodySmall),
+          Text(
+              '${booking.businessName}, ${formatDayTime(booking.startsAt, booking.timezone)}',
+              style: text.bodySmall),
           const SizedBox(height: Space.lg),
           Row(children: [
             const StatusPill('Kept aside, not taken', state: MoneyState.held),
             const Spacer(),
             Text(formatMoney(booking.heldAmount, booking.currency),
-                style: text.headlineSmall?.copyWith(color: Palette.held, fontFeatures: Fonts.tabular)),
+                style: text.headlineSmall?.copyWith(
+                    color: Palette.held, fontFeatures: Fonts.tabular)),
           ]),
         ]),
       ),
@@ -179,13 +206,17 @@ class _Pay extends StatelessWidget {
         Row(children: [
           const Icon(Icons.schedule_rounded, size: 18, color: Palette.muted),
           const SizedBox(width: Space.sm),
-          Text('Your time is kept for $minutes:$seconds more', style: text.bodySmall?.copyWith(fontFeatures: Fonts.tabular)),
+          Text('Your time is kept for $minutes:$seconds more',
+              style: text.bodySmall?.copyWith(fontFeatures: Fonts.tabular)),
         ]),
       ],
       if (opened) ...[
         const SizedBox(height: Space.xl),
         const Row(children: [
-          SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2)),
           SizedBox(width: Space.md),
           Expanded(child: Text('Waiting for PayPal…')),
         ]),
@@ -195,9 +226,10 @@ class _Pay extends StatelessWidget {
 }
 
 class _Confirmed extends StatelessWidget {
-  const _Confirmed({required this.booking});
+  const _Confirmed({required this.booking, required this.isGuest});
 
   final ClientBooking booking;
+  final bool isGuest;
 
   @override
   Widget build(BuildContext context) {
@@ -208,12 +240,16 @@ class _Confirmed extends StatelessWidget {
       Text('You’re booked', style: text.displaySmall),
       const SizedBox(height: Space.sm),
       Text(
-        booking.confirmationNumber == null ? 'See you soon.' : 'Your booking reference is ${booking.confirmationNumber}.',
+        booking.confirmationNumber == null
+            ? 'See you soon.'
+            : 'Your booking reference is ${booking.confirmationNumber}.',
         style: text.bodyLarge?.copyWith(color: Palette.muted),
       ),
       const SizedBox(height: Space.xl),
       DecoratedBox(
-        decoration: BoxDecoration(color: Palette.sage, borderRadius: BorderRadius.circular(Radii.sheet)),
+        decoration: BoxDecoration(
+            color: Palette.sage,
+            borderRadius: BorderRadius.circular(Radii.sheet)),
         child: Padding(
           padding: const EdgeInsets.all(Space.lg),
           child: HoldTicket(
@@ -224,21 +260,35 @@ class _Confirmed extends StatelessWidget {
             ],
             held: formatMoney(booking.heldAmount, booking.currency),
             heldCaption: 'kept aside, not taken',
-            footnote: 'You can cancel or move it from My bookings. You’ll always see what it costs first.',
+            footnote:
+                'You can cancel or move it from My bookings. You’ll always see what it costs first.',
           ),
         ),
       ),
       const SizedBox(height: Space.xl),
-      Wrap(spacing: Space.md, runSpacing: Space.md, children: [
-        FilledButton(onPressed: () => context.go('/my'), child: const Text('See my bookings')),
-        OutlinedButton(onPressed: () => context.go('/my/profile'), child: const Text('Get reminders by email')),
-      ]),
+      if (isGuest) ...[
+        Text(context.tr('booking.guest.confirmed'), style: text.bodyMedium),
+        const SizedBox(height: Space.md),
+        FilledButton(
+          onPressed: () => context.go('/search'),
+          child: Text(context.tr('land.find_service')),
+        ),
+      ] else
+        Wrap(spacing: Space.md, runSpacing: Space.md, children: [
+          FilledButton(
+              onPressed: () => context.go('/my'),
+              child: const Text('See my bookings')),
+          OutlinedButton(
+              onPressed: () => context.go('/my/profile'),
+              child: const Text('Get reminders by email')),
+        ]),
     ]);
   }
 }
 
 class _Message extends StatelessWidget {
-  const _Message({required this.icon, required this.title, this.message, this.action});
+  const _Message(
+      {required this.icon, required this.title, this.message, this.action});
 
   final IconData icon;
   final String title;
